@@ -28,6 +28,27 @@ const voteButtons = document.getElementById('voteButtons');
 const audioSection = document.getElementById('audioSection');
 const remoteAudio = document.getElementById('remoteAudio');
 
+// サイドバー生成（なければ追加）
+let sidebar = document.getElementById('sidebar');
+if (!sidebar) {
+    sidebar = document.createElement('div');
+    sidebar.id = 'sidebar';
+    sidebar.style.position = 'fixed';
+    sidebar.style.left = '0';
+    sidebar.style.top = '0';
+    sidebar.style.width = '180px';
+    sidebar.style.height = '100%';
+    sidebar.style.background = '#f0f0f0';
+    sidebar.style.borderRight = '1px solid #ccc';
+    sidebar.style.padding = '16px 8px';
+    sidebar.style.overflowY = 'auto';
+    sidebar.innerHTML = '<h3>参加者</h3><div id="sidebarPlayers"></div>';
+    document.body.appendChild(sidebar);
+    // メイン画面を右にずらす
+    document.getElementById('app').style.marginLeft = '200px';
+}
+const sidebarPlayers = document.getElementById('sidebarPlayers') || sidebar.querySelector('#sidebarPlayers');
+
 // ルーム作成
 createRoomBtn.onclick = () => {
     const name = playerNameInput.value.trim();
@@ -59,6 +80,20 @@ socket.on('room_created', data => {
 // ルーム参加完了
 socket.on('player_joined', data => {
     if (!roomId) roomId = roomIdInput.value.trim();
+    entrySection.style.display = 'none';
+    gameSection.style.display = '';
+    roomInfo.textContent = `ルームID: ${roomId}`;
+    // サイドバーに参加者を縦並びで表示
+    if (sidebarPlayers) {
+        sidebarPlayers.innerHTML = '';
+        data.players.forEach(p => {
+            const div = document.createElement('div');
+            div.textContent = p.name;
+            div.style.padding = '4px 0';
+            sidebarPlayers.appendChild(div);
+        });
+    }
+    // 旧UIも一応更新
     playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
 });
 
