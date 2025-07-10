@@ -1,5 +1,8 @@
 // Socket.IOクライアント
-const socket = io();
+const socket = io(window.location.origin, {
+  path: "/socket.io/",
+  transports: ["websocket", "polling"]
+});
 let localStream = null;
 let peerConnections = {};
 let roomId = null;
