@@ -79,10 +79,6 @@ socket.on('room_created', data => {
 
 // ルーム参加完了
 socket.on('player_joined', data => {
-    if (!roomId) roomId = roomIdInput.value.trim();
-    entrySection.style.display = 'none';
-    gameSection.style.display = '';
-    roomInfo.textContent = `ルームID: ${roomId}`;
     // サイドバーに参加者を縦並びで表示
     if (sidebarPlayers) {
         sidebarPlayers.innerHTML = '';
@@ -93,8 +89,16 @@ socket.on('player_joined', data => {
             sidebarPlayers.appendChild(div);
         });
     }
-    // 旧UIも一応更新
     playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
+
+    // もし自分のplayerIdが未セット、または自分が新規参加者なら画面遷移
+    if (!playerId || data.player_id === playerId) {
+        roomId = roomIdInput.value.trim();
+        playerId = data.player_id;
+        entrySection.style.display = 'none';
+        gameSection.style.display = '';
+        roomInfo.textContent = `ルームID: ${roomId}`;
+    }
 });
 
 // ゲーム開始
