@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人狼ゲーム</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- ルーム作成・参加画面 -->
+        <div id="entry-section">
+            <h1>人狼ゲーム</h1>
+            <div>
+                <input type="text" id="playerName" placeholder="名前を入力">
+            </div>
+            <div>
+                <button id="createRoomBtn">ルーム作成</button>
+                <input type="text" id="roomIdInput" placeholder="ルームID">
+                <button id="joinRoomBtn">ルーム参加</button>
+            </div>
+        </div>
+
+        <!-- ゲーム画面 -->
+        <div id="game-section" style="display:none;">
+            <div id="roomInfo"></div>
+            <div id="phaseInfo"></div>
+            <div id="roleInfo"></div>
+            <div id="playerList"></div>
+            <div id="audioSection">
+                <audio id="remoteAudio" autoplay></audio>
+            </div>
+            <div id="chatSection">
+                <div id="chatMessages" style="height:150px;overflow:auto;"></div>
+                <input type="text" id="chatInput" placeholder="メッセージ">
+                <button id="sendChatBtn">送信</button>
+            </div>
+            <div id="voteSection" style="display:none;">
+                <h3>投票</h3>
+                <div id="voteButtons"></div>
+            </div>
+            <div id="actionSection" style="display:none;"></div>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html> 
