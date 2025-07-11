@@ -292,6 +292,7 @@ socket.on('role_assigned', data => {
 
     // 2. 役職名・説明
     updateSidebarRoleInfo(data.role, data.description);
+    updateMyRoleArea(data.role);
 });
 
 // フェーズ変更
@@ -318,8 +319,16 @@ socket.on('phase_changed', data => {
     if (data.phase === 'day') {
         showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
         updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
+        updateMyRoleArea(role);
     } else {
         hideDayPhaseScreen();
+    }
+    if (data.phase === 'voting') {
+        showVotePhaseScreen((data.voting_time || 60));
+        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
+        updateMyRoleArea(role);
+    } else {
+        hideVotePhaseScreen();
     }
     // 生存者一覧更新（サーバーから生存者リストをもらうのが理想だが、現状はplayerListから取得）
     if (alivePlayers && playerList.textContent) {
@@ -535,6 +544,93 @@ function updateSidebarRoleInfo(role, description) {
 function updateAlivePlayers(aliveList) {
     if (alivePlayers) alivePlayers.innerHTML = aliveList.map(n => `<div>${n}</div>`).join('');
 }
+
+// 1. サイドバー役職名
+const myRoleArea = document.getElementById('myRoleArea');
+function updateMyRoleArea(role) {
+    if (myRoleArea) myRoleArea.textContent = role ? `役職：${role}` : '';
+}
+
+// 2. 昼フェーズカウントダウン
+function showDayPhaseScreen(dayNum, remainSec) {
+    if (!dayPhaseScreen) return;
+    dayPhaseScreen.style.display = 'flex';
+    dayPhaseTitle.textContent = `${dayNum}日目 昼`;
+    updateDayPhaseTimer(remainSec);
+    gameSection.style.display = 'none';
+    sidebar.style.display = '';
+}
+function updateDayPhaseTimer(sec) {
+    if (dayPhaseTimer) clearInterval(dayPhaseTimer);
+    let remain = sec;
+    if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
+    dayPhaseTimer = setInterval(() => {
+        remain--;
+        if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
+        if (remain <= 0) {
+            clearInterval(dayPhaseTimer);
+            hideDayPhaseScreen();
+        }
+    }, 1000);
+}
+
+// 3. 投票フェーズ専用画面
+const votePhaseScreen = document.getElementById('votePhaseScreen');
+const votePhaseTimerElem = document.getElementById('votePhaseTimer');
+const votePhaseUI = document.getElementById('votePhaseUI');
+let votePhaseTimer = null;
+function showVotePhaseScreen(remainSec) {
+    if (!votePhaseScreen) return;
+    votePhaseScreen.style.display = 'flex';
+    sidebar.style.display = '';
+    updateVotePhaseTimer(remainSec);
+    showVotingUI(votePhaseUI);
+    gameSection.style.display = 'none';
+}
+function hideVotePhaseScreen() {
+    if (votePhaseScreen) votePhaseScreen.style.display = 'none';
+    gameSection.style.display = '';
+}
+function updateVotePhaseTimer(sec) {
+    if (votePhaseTimer) clearInterval(votePhaseTimer);
+    let remain = sec;
+    if (votePhaseTimerElem) votePhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
+    votePhaseTimer = setInterval(() => {
+        remain--;
+        if (votePhaseTimerElem) votePhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
+        if (remain <= 0) {
+            clearInterval(votePhaseTimer);
+            hideVotePhaseScreen();
+        }
+    }, 1000);
+}
+
+// phase_changed修正
+socket.on('phase_changed', data => {
+    if (data.phase === 'day') {
+        showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
+        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
+        updateMyRoleArea(role);
+    } else {
+        hideDayPhaseScreen();
+    }
+    if (data.phase === 'voting') {
+        showVotePhaseScreen((data.voting_time || 60));
+        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
+        updateMyRoleArea(role);
+    } else {
+        hideVotePhaseScreen();
+    }
+    // ...生存者一覧更新など既存の処理...
+});
+
+socket.on('role_assigned', data => {
+    myRoleInfo = data;
+    role = data.role;
+    updateSidebarRoleInfo(data.role, data.description);
+    updateMyRoleArea(data.role);
+    // ...既存の処理...
+});
 
 // 4. 昼フェーズ専用画面
 function showDayPhaseScreen(dayNum, remainSec) {

@@ -88,7 +88,8 @@
         <!-- サイドバー -->
         <div id="sidebar" style="position:fixed;left:0;top:0;width:200px;height:100%;background:#f0f0f0;border-right:1px solid #ccc;padding:16px 8px;overflow-y:auto;display:none;flex-direction:column;justify-content:space-between;">
           <div id="sidebarTop">
-            <div id="myNameArea" style="font-weight:bold;margin-bottom:8px;"></div>
+            <div id="myNameArea" style="font-weight:bold;margin-bottom:4px;"></div>
+            <div id="myRoleArea" style="font-size:14px;color:#333;margin-bottom:12px;"></div>
             <div id="sidebarRoleInfo" style="margin-bottom:12px;"></div>
           </div>
           <div>
@@ -103,9 +104,16 @@
 
         <!-- 昼フェーズ専用画面 -->
         <div id="dayPhaseScreen" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:#fff;z-index:1000;justify-content:center;align-items:center;flex-direction:column;">
-          <img src="/static/img/discussion.png" alt="議論場" style="max-width:400px;margin-bottom:24px;" />
+          <img id="discussionImg" src="/static/img/discussion.png" alt="議論場" style="max-width:400px;margin-bottom:24px;" />
           <div style="font-size:2rem;font-weight:bold;margin-bottom:12px;" id="dayPhaseTitle">1日目 昼</div>
           <div style="font-size:1.5rem;" id="dayPhaseTimer">残り 5:00</div>
+        </div>
+
+        <!-- 投票フェーズ専用画面 -->
+        <div id="votePhaseScreen" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:#f8f8ff;z-index:1000;justify-content:center;align-items:center;flex-direction:column;">
+          <div style="font-size:2rem;font-weight:bold;margin-bottom:12px;">投票フェーズ</div>
+          <div id="votePhaseTimer" style="font-size:1.5rem;margin-bottom:24px;">残り 1:00</div>
+          <div id="votePhaseUI"></div>
         </div>
     </div>
     <script src="/static/js/app.js"></script>
