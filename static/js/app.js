@@ -9,6 +9,7 @@ let roomId = null;
 let playerId = null;
 let role = null;
 let isHost = false;
+let myRoleInfo = null;
 
 // UI要素
 const entrySection = document.getElementById('entry-section');
@@ -190,10 +191,38 @@ socket.on('game_started', data => {
     if (voteSection) {
         voteSection.style.display = '';
     }
+    // 役職説明フェーズなら必ず役職説明画面・サイドバーを表示
+    if (data.phase === 'role_explanation') {
+        // 役職情報がなければplayers配列から自分の情報を探す
+        if (!myRoleInfo && data.players) {
+            const me = data.players.find(p => p.id === playerId);
+            if (me) {
+                myRoleInfo = {
+                    role: me.role,
+                    description: '', // 必要ならクライアント側でROLE_DESCRIPTIONSを参照
+                    partners: []
+                };
+            }
+        }
+        if (myRoleInfo) {
+            if (roleExplanation && roleExplanationContent) {
+                roleExplanationContent.innerHTML = `
+                    <h3>${myRoleInfo.role}</h3>
+                    <p>${myRoleInfo.description}</p>
+                    ${myRoleInfo.partners && myRoleInfo.partners.length > 0 ? `<p><strong>相方:</strong> ${myRoleInfo.partners.join(', ')}</p>` : ''}
+                `;
+                roleExplanation.style.display = '';
+                sidebar.style.display = '';
+                document.getElementById('app').style.marginLeft = '220px';
+                updateRoleChats(myRoleInfo.role);
+            }
+        }
+    }
 });
 
 // 役職配布
 socket.on('role_assigned', data => {
+    myRoleInfo = data;
     role = data.role;
     
     // 役職説明画面を表示
