@@ -141,6 +141,24 @@ socket.on('player_joined', data => {
     if (data.player_id && (!playerId || playerId === "")) {
         playerId = data.player_id;
     }
+
+    // 1. ルーム入室時に自分の名前をmyNameに保存し、myNameAreaに表示。
+    let myName = '';
+    if (playerNameInput.value) myName = playerNameInput.value.trim();
+    const myNameArea = document.getElementById('myNameArea');
+    if (myNameArea) myNameArea.textContent = `あなた：${myName}`;
+
+    // 2. 役職名・説明
+    const sidebarRoleInfo = document.getElementById('sidebarRoleInfo');
+    if (myRoleInfo) {
+        updateSidebarRoleInfo(myRoleInfo.role, myRoleInfo.description);
+    }
+
+    // 3. 生存者一覧
+    const alivePlayers = document.getElementById('alivePlayers');
+    if (alivePlayers && data.players) {
+        updateAlivePlayers(data.players.map(p => p.name));
+    }
 });
 
 // プレイヤー退出
@@ -150,6 +168,13 @@ socket.on('player_left', data => {
     // プレイヤーリストを更新
     if (data.players) {
         playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
+    }
+
+    // 4. 生存者一覧
+    const alivePlayers = document.getElementById('alivePlayers');
+    if (alivePlayers && playerList.textContent) {
+        const names = playerList.textContent.replace('参加者: ', '').split(',').map(s => s.trim()).filter(Boolean);
+        updateAlivePlayers(names);
     }
 });
 
@@ -264,6 +289,9 @@ socket.on('role_assigned', data => {
     if (data.partners && data.partners.length > 0) {
         roleInfo.textContent += `\n相方: ${data.partners.join(', ')}`;
     }
+
+    // 2. 役職名・説明
+    updateSidebarRoleInfo(data.role, data.description);
 });
 
 // フェーズ変更
@@ -280,6 +308,23 @@ socket.on('phase_changed', data => {
         setAudioMute(true);
     } else {
         setAudioMute(false);
+    }
+
+    // 4. 昼フェーズ専用画面
+    const dayPhaseScreen = document.getElementById('dayPhaseScreen');
+    const dayPhaseTitle = document.getElementById('dayPhaseTitle');
+    const dayPhaseTimerElem = document.getElementById('dayPhaseTimer');
+
+    if (data.phase === 'day') {
+        showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
+        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
+    } else {
+        hideDayPhaseScreen();
+    }
+    // 生存者一覧更新（サーバーから生存者リストをもらうのが理想だが、現状はplayerListから取得）
+    if (alivePlayers && playerList.textContent) {
+        const names = playerList.textContent.replace('参加者: ', '').split(',').map(s => s.trim()).filter(Boolean);
+        updateAlivePlayers(names);
     }
 });
 
@@ -480,3 +525,40 @@ socket.on('all_ready', data => {
 window.onload = () => {
     startAudio();
 }; 
+
+// 2. 役職名・説明
+function updateSidebarRoleInfo(role, description) {
+    if (sidebarRoleInfo) sidebarRoleInfo.innerHTML = `<b>${role || ''}</b><br><span style='font-size:13px;'>${description || ''}</span>`;
+}
+
+// 3. 生存者一覧
+function updateAlivePlayers(aliveList) {
+    if (alivePlayers) alivePlayers.innerHTML = aliveList.map(n => `<div>${n}</div>`).join('');
+}
+
+// 4. 昼フェーズ専用画面
+function showDayPhaseScreen(dayNum, remainSec) {
+    if (!dayPhaseScreen) return;
+    dayPhaseScreen.style.display = 'flex';
+    dayPhaseTitle.textContent = `${dayNum}日目 昼`;
+    updateDayPhaseTimer(remainSec);
+    gameSection.style.display = 'none';
+}
+function hideDayPhaseScreen() {
+    if (dayPhaseScreen) dayPhaseScreen.style.display = 'none';
+    gameSection.style.display = '';
+}
+function updateDayPhaseTimer(sec) {
+    if (dayPhaseTimer) clearInterval(dayPhaseTimer);
+    let remain = sec;
+    dayPhaseTimer = setInterval(() => {
+        if (dayPhaseTimer) {
+            remain--;
+            if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
+            if (remain <= 0) {
+                clearInterval(dayPhaseTimer);
+                hideDayPhaseScreen();
+            }
+        }
+    }, 1000);
+} 

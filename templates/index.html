@@ -52,6 +52,10 @@
                         </div>
                     </div>
                     <div style="margin-top: 10px;">
+                        <label>昼フェーズ時間: <input type="number" id="dayTime" value="5" min="1" max="10" style="width: 50px;"> 分</label>
+                        <label style="margin-left: 20px;">夜フェーズ時間: <input type="number" id="nightTime" value="2" min="1" max="3" style="width: 50px;"> 分</label>
+                    </div>
+                    <div style="margin-top: 10px;">
                         <span id="totalRoles">合計: 13人</span>
                     </div>
                 </div>
@@ -79,6 +83,29 @@
                 <div id="voteButtons"></div>
             </div>
             <div id="actionSection" style="display:none;"></div>
+        </div>
+
+        <!-- サイドバー -->
+        <div id="sidebar" style="position:fixed;left:0;top:0;width:200px;height:100%;background:#f0f0f0;border-right:1px solid #ccc;padding:16px 8px;overflow-y:auto;display:none;flex-direction:column;justify-content:space-between;">
+          <div id="sidebarTop">
+            <div id="myNameArea" style="font-weight:bold;margin-bottom:8px;"></div>
+            <div id="sidebarRoleInfo" style="margin-bottom:12px;"></div>
+          </div>
+          <div>
+            <h3>役職チャット</h3>
+            <div id="roleChats"></div>
+          </div>
+          <div id="sidebarBottom" style="margin-top:24px;">
+            <div style="font-size:13px;color:#888;">生存者</div>
+            <div id="alivePlayers"></div>
+          </div>
+        </div>
+
+        <!-- 昼フェーズ専用画面 -->
+        <div id="dayPhaseScreen" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:#fff;z-index:1000;justify-content:center;align-items:center;flex-direction:column;">
+          <img src="/static/img/discussion.png" alt="議論場" style="max-width:400px;margin-bottom:24px;" />
+          <div style="font-size:2rem;font-weight:bold;margin-bottom:12px;" id="dayPhaseTitle">1日目 昼</div>
+          <div style="font-size:1.5rem;" id="dayPhaseTimer">残り 5:00</div>
         </div>
     </div>
     <script src="/static/js/app.js"></script>
