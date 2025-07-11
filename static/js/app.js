@@ -31,7 +31,7 @@ const remoteAudio = document.getElementById('remoteAudio');
 const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
 
-// サイドバー生成（なければ追加）
+// 役職チャット用サイドバー（ゲーム開始後に表示）
 let sidebar = document.getElementById('sidebar');
 if (!sidebar) {
     sidebar = document.createElement('div');
@@ -39,18 +39,43 @@ if (!sidebar) {
     sidebar.style.position = 'fixed';
     sidebar.style.left = '0';
     sidebar.style.top = '0';
-    sidebar.style.width = '180px';
+    sidebar.style.width = '200px';
     sidebar.style.height = '100%';
     sidebar.style.background = '#f0f0f0';
     sidebar.style.borderRight = '1px solid #ccc';
     sidebar.style.padding = '16px 8px';
     sidebar.style.overflowY = 'auto';
-    sidebar.innerHTML = '<h3>参加者</h3><div id="sidebarPlayers"></div>';
+    sidebar.style.display = 'none'; // 初期は非表示
+    sidebar.innerHTML = '<h3>役職チャット</h3><div id="roleChats"></div>';
     document.body.appendChild(sidebar);
-    // メイン画面を右にずらす
-    document.getElementById('app').style.marginLeft = '200px';
 }
-const sidebarPlayers = document.getElementById('sidebarPlayers') || sidebar.querySelector('#sidebarPlayers');
+const roleChats = document.getElementById('roleChats') || sidebar.querySelector('#roleChats');
+
+// 役職設定UI要素
+const villagerCount = document.getElementById('villagerCount');
+const werewolfCount = document.getElementById('werewolfCount');
+const seerCount = document.getElementById('seerCount');
+const knightCount = document.getElementById('knightCount');
+const mediumCount = document.getElementById('mediumCount');
+const totalRoles = document.getElementById('totalRoles');
+const roleExplanation = document.getElementById('roleExplanation');
+const roleExplanationContent = document.getElementById('roleExplanationContent');
+const readyBtn = document.getElementById('readyBtn');
+const readyStatus = document.getElementById('readyStatus');
+
+// 役職数の合計を計算
+function updateTotalRoles() {
+    const total = parseInt(villagerCount.value) + parseInt(werewolfCount.value) + 
+                  parseInt(seerCount.value) + parseInt(knightCount.value) + parseInt(mediumCount.value);
+    totalRoles.textContent = `合計: ${total}人`;
+}
+
+// 役職数変更時のイベントリスナー
+[villagerCount, werewolfCount, seerCount, knightCount, mediumCount].forEach(input => {
+    if (input) {
+        input.addEventListener('input', updateTotalRoles);
+    }
+});
 
 // ルーム作成
 createRoomBtn.onclick = () => {
@@ -101,18 +126,6 @@ socket.on('player_joined', data => {
         }
     }
     
-    // サイドバーに参加者を縦並びで表示
-    if (sidebarPlayers && data.players) {
-        sidebarPlayers.innerHTML = '';
-        data.players.forEach(p => {
-            const div = document.createElement('div');
-            div.textContent = p.name;
-            div.style.padding = '4px 0';
-            div.style.borderBottom = '1px solid #ddd';
-            sidebarPlayers.appendChild(div);
-        });
-    }
-    
     // プレイヤーリストを更新
     if (data.players) {
         playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
@@ -122,18 +135,6 @@ socket.on('player_joined', data => {
 // プレイヤー退出
 socket.on('player_left', data => {
     console.log('player_left event received:', data);
-    
-    // サイドバーに参加者を縦並びで表示
-    if (sidebarPlayers && data.players) {
-        sidebarPlayers.innerHTML = '';
-        data.players.forEach(p => {
-            const div = document.createElement('div');
-            div.textContent = p.name;
-            div.style.padding = '4px 0';
-            div.style.borderBottom = '1px solid #ddd';
-            sidebarPlayers.appendChild(div);
-        });
-    }
     
     // プレイヤーリストを更新
     if (data.players) {
@@ -149,14 +150,27 @@ if (startGameBtn) {
             return;
         }
         
+        // 役職設定を取得
+        const roleDistribution = {
+            '村人': parseInt(villagerCount.value),
+            '人狼': parseInt(werewolfCount.value),
+            '占い師': parseInt(seerCount.value),
+            '騎士': parseInt(knightCount.value),
+            '霊媒師': parseInt(mediumCount.value)
+        };
+        
+        const totalRoleCount = Object.values(roleDistribution).reduce((a, b) => a + b, 0);
+        
         // 最低人数チェック（クライアントサイド）
-        const playerCount = sidebarPlayers ? sidebarPlayers.children.length : 0;
-        if (playerCount < 3) {
+        if (totalRoleCount < 3) {
             alert('ゲームを開始するには最低3人必要です');
             return;
         }
         
-        socket.emit('start_game', { room_id: roomId });
+        socket.emit('start_game', { 
+            room_id: roomId,
+            role_distribution: roleDistribution
+        });
         startGameBtn.disabled = true;
         startGameBtn.textContent = 'ゲーム開始中...';
     };
@@ -181,6 +195,25 @@ socket.on('game_started', data => {
 // 役職配布
 socket.on('role_assigned', data => {
     role = data.role;
+    
+    // 役職説明画面を表示
+    if (roleExplanation && roleExplanationContent) {
+        roleExplanationContent.innerHTML = `
+            <h3>${data.role}</h3>
+            <p>${data.description}</p>
+            ${data.partners && data.partners.length > 0 ? `<p><strong>相方:</strong> ${data.partners.join(', ')}</p>` : ''}
+        `;
+        roleExplanation.style.display = '';
+        
+        // 役職チャットサイドバーを表示
+        sidebar.style.display = '';
+        document.getElementById('app').style.marginLeft = '220px';
+        
+        // 役職に応じたチャットリンクを追加
+        updateRoleChats(data.role);
+    }
+    
+    // 従来の表示も更新
     roleInfo.textContent = `あなたの役職: ${data.role}\n${data.description}`;
     if (data.partners && data.partners.length > 0) {
         roleInfo.textContent += `\n相方: ${data.partners.join(', ')}`;
@@ -246,6 +279,93 @@ function setAudioMute(mute) {
         localStream.getAudioTracks().forEach(track => track.enabled = !mute);
     }
 }
+
+// 役職に応じたチャットリンクを更新
+function updateRoleChats(playerRole) {
+    if (!roleChats) return;
+    
+    roleChats.innerHTML = '';
+    
+    // 人狼の場合
+    if (playerRole === '人狼') {
+        const werewolfChat = document.createElement('div');
+        werewolfChat.innerHTML = `
+            <button onclick="openRoleChat('werewolf')" style="width: 100%; margin: 5px 0; padding: 8px; background: #d32f2f; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                人狼グループチャット
+            </button>
+            <button onclick="openRoleChat('werewolf_vote')" style="width: 100%; margin: 5px 0; padding: 8px; background: #7b1fa2; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                殺害対象投票
+            </button>
+        `;
+        roleChats.appendChild(werewolfChat);
+    }
+    
+    // 占い師の場合
+    if (playerRole === '占い師') {
+        const seerChat = document.createElement('div');
+        seerChat.innerHTML = `
+            <button onclick="openRoleChat('seer')" style="width: 100%; margin: 5px 0; padding: 8px; background: #1976d2; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                占い結果確認
+            </button>
+        `;
+        roleChats.appendChild(seerChat);
+    }
+    
+    // 霊媒師の場合
+    if (playerRole === '霊媒師') {
+        const mediumChat = document.createElement('div');
+        mediumChat.innerHTML = `
+            <button onclick="openRoleChat('medium')" style="width: 100%; margin: 5px 0; padding: 8px; background: #388e3c; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                霊媒結果確認
+            </button>
+        `;
+        roleChats.appendChild(mediumChat);
+    }
+    
+    // 騎士の場合
+    if (playerRole === '騎士') {
+        const knightChat = document.createElement('div');
+        knightChat.innerHTML = `
+            <button onclick="openRoleChat('knight')" style="width: 100%; margin: 5px 0; padding: 8px; background: #f57c00; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                守護対象選択
+            </button>
+        `;
+        roleChats.appendChild(knightChat);
+    }
+}
+
+// 役職チャットを開く
+function openRoleChat(chatType) {
+    // この機能は後で実装
+    alert(`${chatType} チャットを開きます（機能は後で実装予定）`);
+}
+
+// 準備完了ボタンの処理
+if (readyBtn) {
+    readyBtn.onclick = () => {
+        socket.emit('player_ready', { room_id: roomId });
+        readyBtn.disabled = true;
+        readyBtn.textContent = '準備完了済み';
+    };
+}
+
+// 準備完了状況の更新
+socket.on('ready_status', data => {
+    if (readyStatus) {
+        readyStatus.innerHTML = `
+            <p>準備完了: ${data.ready_count} / ${data.total_count}</p>
+            <p>待機中: ${data.waiting_players.join(', ')}</p>
+        `;
+    }
+});
+
+// 全員準備完了でゲーム開始
+socket.on('all_ready', data => {
+    if (roleExplanation) {
+        roleExplanation.style.display = 'none';
+    }
+    phaseInfo.textContent = `フェーズ: ${data.phase}`;
+});
 
 // ページロード時に音声取得
 window.onload = () => {

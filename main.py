@@ -7,8 +7,8 @@ import uvicorn
 import json
 import random
 import uuid
-from typing import Dict, List, Optional
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Set
+from dataclasses import dataclass, asdict, field
 from enum import Enum
 
 # FastAPIアプリケーション
@@ -65,6 +65,7 @@ class GameRoom:
     phase: GamePhase = GamePhase.WAITING
     max_players: int = 15
     discussion_time: int = 300  # 5分
+    ready_players: Set[str] = field(default_factory=set)  # 準備完了したプレイヤーのset
 
 # ゲームデータ
 rooms: Dict[str, GameRoom] = {}
@@ -224,6 +225,10 @@ async def start_game(sid, data):
         await sio.emit('error', {'message': 'ゲームは既に開始されています'}, room=sid)
         return
     
+    # 役職設定を更新（クライアントから送信された場合）
+    if 'role_distribution' in data:
+        room.role_distribution = data['role_distribution']
+    
     # 最低人数チェック
     if len(room.players) < 3:
         await sio.emit('error', {'message': 'ゲームを開始するには最低3人必要です'}, room=sid)
@@ -232,10 +237,10 @@ async def start_game(sid, data):
     # 役職をランダムに配布
     await assign_roles(room)
     
-    # ゲーム開始
-    room.phase = GamePhase.NIGHT
+    # 準備完了フェーズに移行（すぐに夜フェーズに移行せず、準備完了を待つ）
+    room.phase = GamePhase.WAITING
     await sio.emit('game_started', {
-        'phase': room.phase.value,
+        'phase': 'role_explanation',  # 役職説明フェーズ
         'players': [{'id': p.id, 'name': p.name, 'role': p.role.value if p.role is not None else None} for p in room.players.values()]
     }, room=room_id)
     
@@ -491,6 +496,43 @@ async def join_chat_room(sid, data):
         'chat_type': chat_type,
         'player_id': player_id
     }, room=sid)
+
+@sio.event
+async def player_ready(sid, data):
+    """プレイヤー準備完了"""
+    room_id = data['room_id']
+    if room_id not in rooms:
+        await sio.emit('error', {'message': 'ルームが見つかりません'}, room=sid)
+        return
+    
+    room = rooms[room_id]
+    if sid not in players_by_socket:
+        return
+    
+    player_id = players_by_socket[sid]
+    if player_id not in room.players:
+        return
+    
+    # 準備完了プレイヤーに追加
+    room.ready_players.add(player_id)
+    
+    # 準備完了状況を全員に通知
+    waiting_players = [room.players[pid].name for pid in room.players.keys() if pid not in room.ready_players]
+    await sio.emit('ready_status', {
+        'ready_count': len(room.ready_players),
+        'total_count': len(room.players),
+        'waiting_players': waiting_players
+    }, room=room_id)
+    
+    # 全員準備完了チェック
+    if len(room.ready_players) >= len(room.players):
+        # 1日目の夜フェーズ開始
+        room.phase = GamePhase.NIGHT
+        await sio.emit('all_ready', {
+            'phase': room.phase.value
+        }, room=room_id)
+        
+        print(f"All players ready in room {room_id}, starting night phase")
 
 if __name__ == "__main__":
     uvicorn.run(

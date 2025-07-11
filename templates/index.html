@@ -29,9 +29,43 @@
             <div id="phaseInfo">フェーズ: 待機中</div>
             <div id="roleInfo"></div>
             <div id="playerList"></div>
+            
+            <!-- ホスト専用コントロール -->
             <div id="hostControls" style="display:none;">
+                <div id="roleSettings" style="background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                    <h3>役職設定</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                        <div>
+                            <label>村人: <input type="number" id="villagerCount" value="8" min="1" max="10" style="width: 50px;"></label>
+                        </div>
+                        <div>
+                            <label>人狼: <input type="number" id="werewolfCount" value="2" min="1" max="5" style="width: 50px;"></label>
+                        </div>
+                        <div>
+                            <label>占い師: <input type="number" id="seerCount" value="1" min="0" max="2" style="width: 50px;"></label>
+                        </div>
+                        <div>
+                            <label>騎士: <input type="number" id="knightCount" value="1" min="0" max="2" style="width: 50px;"></label>
+                        </div>
+                        <div>
+                            <label>霊媒師: <input type="number" id="mediumCount" value="1" min="0" max="2" style="width: 50px;"></label>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <span id="totalRoles">合計: 13人</span>
+                    </div>
+                </div>
                 <button id="startGameBtn" style="background-color: #4CAF50; color: white; padding: 10px 20px; margin: 10px 0; border: none; border-radius: 5px; cursor: pointer;">ゲーム開始</button>
             </div>
+            
+            <!-- 役職説明画面 -->
+            <div id="roleExplanation" style="display:none; background: #fff; padding: 20px; border-radius: 10px; margin: 10px 0;">
+                <h2>あなたの役職</h2>
+                <div id="roleExplanationContent"></div>
+                <button id="readyBtn" style="background-color: #2196F3; color: white; padding: 10px 20px; margin: 10px 0; border: none; border-radius: 5px; cursor: pointer;">準備完了</button>
+                <div id="readyStatus" style="margin-top: 10px;"></div>
+            </div>
+            
             <div id="audioSection">
                 <audio id="remoteAudio" autoplay></audio>
             </div>
