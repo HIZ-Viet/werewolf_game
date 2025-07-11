@@ -608,6 +608,24 @@ function updateVotePhaseTimer(sec) {
     }, 1000);
 }
 
+// 投票フェーズ専用画面の投票ボタン生成
+function showVotingUI_VotePhase(alivePlayers) {
+    if (!votePhaseUI) return;
+    votePhaseUI.innerHTML = '';
+    if (!alivePlayers || !Array.isArray(alivePlayers)) return;
+    alivePlayers.forEach(player => {
+        if (player.id !== playerId) {
+            const btn = document.createElement('button');
+            btn.textContent = player.name;
+            btn.onclick = () => {
+                socket.emit('submit_vote', { room_id: roomId, target_id: player.id });
+                votePhaseUI.innerHTML = '投票済み';
+            };
+            votePhaseUI.appendChild(btn);
+        }
+    });
+}
+
 // phase_changed修正
 socket.on('phase_changed', data => {
     if (data.phase === 'day') {
@@ -621,6 +639,10 @@ socket.on('phase_changed', data => {
         showVotePhaseScreen((data.voting_time || 60));
         updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
         updateMyRoleArea(role);
+        // サーバーから生存者リストが来ていれば投票ボタンを生成
+        if (data.alive_players) {
+            showVotingUI_VotePhase(data.alive_players);
+        }
     } else {
         hideVotePhaseScreen();
     }

@@ -540,8 +540,11 @@ async def player_ready(sid, data):
         async def day_to_voting():
             await asyncio.sleep(room.day_time * 60)
             room.phase = GamePhase.VOTING
+            # 生存者リストを送信
+            alive_players = [p for p in room.players.values() if p.is_alive]
             await sio.emit('phase_changed', {
-                'phase': room.phase.value
+                'phase': room.phase.value,
+                'alive_players': [{'id': p.id, 'name': p.name} for p in alive_players]
             }, room=room_id)
         asyncio.create_task(day_to_voting())
 
