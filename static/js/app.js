@@ -559,6 +559,9 @@ function showDayPhaseScreen(dayNum, remainSec) {
     updateDayPhaseTimer(remainSec);
     gameSection.style.display = 'none';
     sidebar.style.display = '';
+    // 画像を必ず表示
+    const img = document.getElementById('discussionImg');
+    if (img) img.src = '/static/img/discussion.png';
 }
 function updateDayPhaseTimer(sec) {
     if (dayPhaseTimer) clearInterval(dayPhaseTimer);
