@@ -299,11 +299,67 @@ socket.on('role_assigned', data => {
 });
 
 // フェーズ変更
+// 投票フェーズ表示用エリア制御
+const votePhaseArea = document.getElementById('votePhaseArea');
+const votePhaseTitle = document.getElementById('votePhaseTitle');
+const votePhaseTimerArea = document.getElementById('votePhaseTimerArea');
+const votePhaseUI = document.getElementById('votePhaseUI');
+const voteResultMsg = document.getElementById('voteResultMsg');
+let votePhaseAreaTimer = null;
+function showVotePhaseArea(remainSec, alivePlayers, runoffCandidates) {
+    if (!votePhaseArea) return;
+    votePhaseArea.style.display = '';
+    votePhaseTitle.textContent = '投票フェーズ';
+    voteResultMsg.textContent = '';
+    showVotingButtons(alivePlayers, runoffCandidates);
+    updateVotePhaseAreaTimer(remainSec);
+}
+function hideVotePhaseArea() {
+    if (votePhaseArea) votePhaseArea.style.display = 'none';
+    if (votePhaseAreaTimer) clearInterval(votePhaseAreaTimer);
+    votePhaseUI.innerHTML = '';
+    voteResultMsg.textContent = '';
+}
+function updateVotePhaseAreaTimer(sec) {
+    if (votePhaseAreaTimer) clearInterval(votePhaseAreaTimer);
+    let remain = sec;
+    if (votePhaseTimerArea) votePhaseTimerArea.textContent = `残り ${formatTime(remain)}`;
+    votePhaseAreaTimer = setInterval(() => {
+        remain--;
+        if (votePhaseTimerArea) votePhaseTimerArea.textContent = `残り ${formatTime(remain)}`;
+        if (remain <= 0) {
+            clearInterval(votePhaseAreaTimer);
+            // タイムアップ時の処理はサーバーからのphase_changedで制御
+        }
+    }, 1000);
+}
+function showVotingButtons(alivePlayers, runoffCandidates) {
+    votePhaseUI.innerHTML = '';
+    let targetList = alivePlayers;
+    if (runoffCandidates && Array.isArray(runoffCandidates) && runoffCandidates.length > 0) {
+        targetList = runoffCandidates;
+    }
+    if (!targetList || !Array.isArray(targetList)) return;
+    targetList.forEach(player => {
+        if (player.id !== playerId) {
+            const btn = document.createElement('button');
+            btn.textContent = player.name;
+            btn.onclick = () => {
+                socket.emit('submit_vote', { room_id: roomId, target_id: player.id });
+                votePhaseUI.innerHTML = '投票済み';
+            };
+            votePhaseUI.appendChild(btn);
+        }
+    });
+}
+// phase_changedで投票フェーズ表示
 socket.on('phase_changed', data => {
     currentPhase = data.phase;
     phaseInfo.textContent = `フェーズ: ${data.phase}`;
     if (data.phase === 'voting') {
-        showVotingUI();
+        showVotePhaseArea((data.voting_time || 60), data.alive_players || [], data.runoff_candidates || []);
+    } else {
+        hideVotePhaseArea();
     }
     if (data.phase === 'day') {
         const dayTimeSec = (data.day_time || 5) * 60;
@@ -381,10 +437,17 @@ function showVoteResult(message) {
 
 // 投票結果受信時の処理
 socket.on('voting_result', data => {
-    // 追放者発表
+    if (!votePhaseArea) return;
+    // 結果発表
     if (data.executed_players && data.executed_players.length > 0) {
         const executedNames = (data.executed_players_info || []).map(p => p.name).join('、');
-        showVoteResult(`今日の追放者は…<br><b>${executedNames}さん</b>です。`);
+        voteResultMsg.innerHTML = `今回処刑されるのは…<br><b>${executedNames}さん</b>です。`;
+        votePhaseUI.innerHTML = '';
+        // 10秒間表示→自動で非表示
+        setTimeout(() => {
+            hideVotePhaseArea();
+        }, 10000);
+        // 追放者はマイク自動ミュート
         if (data.executed_players.includes(playerId)) {
             isDead = true;
             setAudioMute(true);
@@ -393,16 +456,23 @@ socket.on('voting_result', data => {
                 alert('あなたは処刑されました。マイクは自動でミュートされました。');
             }, 500);
         }
+        // サイドバー生存者リスト更新
+        if (data.alive_players) {
+            updateAlivePlayers(data.alive_players.map(p => p.name));
+        }
     } else if (data.runoff_candidates && data.runoff_candidates.length > 0) {
         // 決選投票発表
         const names = data.runoff_candidates.map(p => p.name).join('、');
-        showVoteResult(`同票のため決選投票を行います。<br>対象: <b>${names}さん</b>`);
+        voteResultMsg.innerHTML = `同票のため決選投票を行います。<br>対象: <b>${names}さん</b>`;
+        showVotingButtons([], data.runoff_candidates);
     } else {
-        showVoteResult('本日は追放者なし');
-    }
-    // サイドバー生存者リスト更新
-    if (data.alive_players) {
-        updateAlivePlayers(data.alive_players.map(p => p.name));
+        voteResultMsg.innerHTML = '本日は追放者なし';
+        setTimeout(() => {
+            hideVotePhaseArea();
+        }, 5000);
+        if (data.alive_players) {
+            updateAlivePlayers(data.alive_players.map(p => p.name));
+        }
     }
 });
 
