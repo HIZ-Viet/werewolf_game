@@ -12,6 +12,7 @@ let isHost = false;
 let myRoleInfo = null;
 let dayPhaseTimer = null;
 let isDead = false;
+let currentPhase = null;
 
 // UI要素
 const entrySection = document.getElementById('entry-section');
@@ -299,6 +300,7 @@ socket.on('role_assigned', data => {
 
 // フェーズ変更
 socket.on('phase_changed', data => {
+    currentPhase = data.phase;
     phaseInfo.textContent = `フェーズ: ${data.phase}`;
     if (data.phase === 'voting') {
         showVotingUI();
@@ -443,47 +445,46 @@ function updateRoleChats(playerRole) {
     
     roleChats.innerHTML = '';
     
-    // 人狼の場合
+    // 昼フェーズかどうか
+    const isDay = currentPhase === 'day';
+    // 人狼
     if (playerRole === '人狼') {
         const werewolfChat = document.createElement('div');
         werewolfChat.innerHTML = `
-            <button onclick="openRoleChat('werewolf')" style="width: 100%; margin: 5px 0; padding: 8px; background: #d32f2f; color: white; border: none; border-radius: 3px; cursor: pointer;">
+            <button onclick="openRoleChat('werewolf')" style="width: 100%; margin: 5px 0; padding: 8px; background: #d32f2f; color: white; border: none; border-radius: 3px; cursor: pointer;" ${isDay ? '' : ''}>
                 人狼グループチャット
             </button>
-            <button onclick="openRoleChat('werewolf_vote')" style="width: 100%; margin: 5px 0; padding: 8px; background: #7b1fa2; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                殺害対象投票
+            <button onclick="openRoleChat('werewolf_vote')" style="width: 100%; margin: 5px 0; padding: 8px; background: #7b1fa2; color: white; border: none; border-radius: 3px; cursor: pointer;" disabled>
+                殺害対象投票（夜のみ）
             </button>
         `;
         roleChats.appendChild(werewolfChat);
     }
-    
-    // 占い師の場合
+    // 占い師
     if (playerRole === '占い師') {
         const seerChat = document.createElement('div');
         seerChat.innerHTML = `
-            <button onclick="openRoleChat('seer')" style="width: 100%; margin: 5px 0; padding: 8px; background: #1976d2; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                占い結果確認
+            <button style="width: 100%; margin: 5px 0; padding: 8px; background: #1976d2; color: white; border: none; border-radius: 3px; cursor: not-allowed;" disabled>
+                占い結果確認（夜のみ）
             </button>
         `;
         roleChats.appendChild(seerChat);
     }
-    
-    // 霊媒師の場合
+    // 霊媒師
     if (playerRole === '霊媒師') {
         const mediumChat = document.createElement('div');
         mediumChat.innerHTML = `
-            <button onclick="openRoleChat('medium')" style="width: 100%; margin: 5px 0; padding: 8px; background: #388e3c; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                霊媒結果確認
+            <button style="width: 100%; margin: 5px 0; padding: 8px; background: #388e3c; color: white; border: none; border-radius: 3px; cursor: not-allowed;" disabled>
+                霊媒結果確認（夜のみ）
             </button>
         `;
         roleChats.appendChild(mediumChat);
     }
-    
-    // 騎士の場合
+    // 騎士
     if (playerRole === '騎士') {
         const knightChat = document.createElement('div');
         knightChat.innerHTML = `
-            <button onclick="openRoleChat('knight')" style="width: 100%; margin: 5px 0; padding: 8px; background: #f57c00; color: white; border: none; border-radius: 3px; cursor: pointer;">
+            <button onclick="openRoleChat('knight')" style="width: 100%; margin: 5px 0; padding: 8px; background: #f57c00; color: white; border: none; border-radius: 3px; cursor: pointer;" ${isDay ? '' : ''}>
                 守護対象選択
             </button>
         `;
@@ -652,6 +653,7 @@ function showVotingUI_VotePhase(alivePlayers) {
 
 // phase_changed修正
 socket.on('phase_changed', data => {
+    currentPhase = data.phase;
     if (data.phase === 'day') {
         showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
         updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
@@ -663,7 +665,6 @@ socket.on('phase_changed', data => {
         showVotePhaseScreen((data.voting_time || 60));
         updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
         updateMyRoleArea(role);
-        // サーバーから生存者リストが来ていれば投票ボタンを生成
         if (data.alive_players) {
             showVotingUI_VotePhase(data.alive_players);
         }
