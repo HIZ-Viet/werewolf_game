@@ -70,34 +70,66 @@ joinRoomBtn.onclick = () => {
 
 // ルーム作成完了
 socket.on('room_created', data => {
+    console.log('room_created event received:', data);
     roomId = data.room_id;
     playerId = data.player_id;
-    entrySection.style.display = 'none';
-    gameSection.style.display = '';
-    roomInfo.textContent = `ルームID: ${roomId}`;
+    // 画面切り替えはplayer_joinedイベントで行う
 });
 
 // ルーム参加完了
 socket.on('player_joined', data => {
-    // サーバーから返されたroom_idとplayer_idで上書き
-    roomId = data.room_id || roomId;
-    if (!playerId) {
-        playerId = data.player_id;
+    console.log('player_joined event received:', data);
+    
+    // ルームIDとプレイヤーIDを設定
+    if (data.room_id) {
+        roomId = data.room_id;
+    }
+    
+    // ゲーム画面がまだ表示されていない場合、画面を切り替え
+    if (entrySection.style.display !== 'none' && roomId) {
         entrySection.style.display = 'none';
         gameSection.style.display = '';
         roomInfo.textContent = `ルームID: ${roomId}`;
     }
+    
     // サイドバーに参加者を縦並びで表示
-    if (sidebarPlayers) {
+    if (sidebarPlayers && data.players) {
         sidebarPlayers.innerHTML = '';
         data.players.forEach(p => {
             const div = document.createElement('div');
             div.textContent = p.name;
             div.style.padding = '4px 0';
+            div.style.borderBottom = '1px solid #ddd';
             sidebarPlayers.appendChild(div);
         });
     }
-    playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
+    
+    // プレイヤーリストを更新
+    if (data.players) {
+        playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
+    }
+});
+
+// プレイヤー退出
+socket.on('player_left', data => {
+    console.log('player_left event received:', data);
+    
+    // サイドバーに参加者を縦並びで表示
+    if (sidebarPlayers && data.players) {
+        sidebarPlayers.innerHTML = '';
+        data.players.forEach(p => {
+            const div = document.createElement('div');
+            div.textContent = p.name;
+            div.style.padding = '4px 0';
+            div.style.borderBottom = '1px solid #ddd';
+            sidebarPlayers.appendChild(div);
+        });
+    }
+    
+    // プレイヤーリストを更新
+    if (data.players) {
+        playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
+    }
 });
 
 // ゲーム開始

@@ -97,8 +97,16 @@ async def disconnect(sid):
         # プレイヤーをルームから削除
         for room in rooms.values():
             if player_id in room.players:
+                player_name = room.players[player_id].name
                 del room.players[player_id]
-                await sio.emit('player_left', {'player_id': player_id}, room=room.id)
+                # Socket.IOルームから退出
+                await sio.leave_room(sid, room.id)
+                # 残りのプレイヤーに退出通知
+                await sio.emit('player_left', {
+                    'player_id': player_id,
+                    'player_name': player_name,
+                    'players': [{'id': p.id, 'name': p.name} for p in room.players.values()]
+                }, room=room.id)
                 break
         del players_by_socket[sid]
 
@@ -134,10 +142,22 @@ async def create_room(sid, data):
     rooms[room_id] = room
     players_by_socket[sid] = player_id
     
+    # Socket.IOのルームに参加
+    await sio.enter_room(sid, room_id)
+    
+    # ルーム作成通知
     await sio.emit('room_created', {
         'room_id': room_id,
         'player_id': player_id
     }, room=sid)
+    
+    # プレイヤー参加通知（作成者用）
+    await sio.emit('player_joined', {
+        'room_id': room_id,
+        'player_id': player_id,
+        'player_name': data['host_name'],
+        'players': [{'id': p.id, 'name': p.name} for p in room.players.values()]
+    }, room=room_id)
     
     print(f"Room created: {room_id} by {data['host_name']}")
 
@@ -166,7 +186,12 @@ async def join_room(sid, data):
     room.players[player_id] = player
     players_by_socket[sid] = player_id
     
+    # Socket.IOのルームに参加
+    await sio.enter_room(sid, room_id)
+    
+    # プレイヤー参加通知（全員に送信）
     await sio.emit('player_joined', {
+        'room_id': room_id,
         'player_id': player_id,
         'player_name': player_name,
         'players': [{'id': p.id, 'name': p.name} for p in room.players.values()]
