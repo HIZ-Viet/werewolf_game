@@ -204,11 +204,29 @@ async def start_game(sid, data):
     """ゲーム開始"""
     room_id = data['room_id']
     if room_id not in rooms:
+        await sio.emit('error', {'message': 'ルームが見つかりません'}, room=sid)
         return
     
     room = rooms[room_id]
+    
+    # ホスト権限チェック
+    if sid not in players_by_socket:
+        await sio.emit('error', {'message': '権限がありません'}, room=sid)
+        return
+    
+    player_id = players_by_socket[sid]
+    if player_id != room.host_id:
+        await sio.emit('error', {'message': 'ホストのみがゲームを開始できます'}, room=sid)
+        return
+    
+    # ゲーム状態チェック
+    if room.phase != GamePhase.WAITING:
+        await sio.emit('error', {'message': 'ゲームは既に開始されています'}, room=sid)
+        return
+    
+    # 最低人数チェック
     if len(room.players) < 3:
-        await sio.emit('error', {'message': '最低3人必要です'}, room=room_id)
+        await sio.emit('error', {'message': 'ゲームを開始するには最低3人必要です'}, room=sid)
         return
     
     # 役職をランダムに配布
@@ -221,7 +239,7 @@ async def start_game(sid, data):
         'players': [{'id': p.id, 'name': p.name, 'role': p.role.value if p.role is not None else None} for p in room.players.values()]
     }, room=room_id)
     
-    print(f"Game started in room {room_id}")
+    print(f"Game started in room {room_id} by host {room.players[player_id].name}")
 
 async def assign_roles(room: GameRoom):
     """役職をランダムに配布"""

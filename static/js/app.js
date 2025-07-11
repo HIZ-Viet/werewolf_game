@@ -8,6 +8,7 @@ let peerConnections = {};
 let roomId = null;
 let playerId = null;
 let role = null;
+let isHost = false;
 
 // UI要素
 const entrySection = document.getElementById('entry-section');
@@ -27,6 +28,8 @@ const voteSection = document.getElementById('voteSection');
 const voteButtons = document.getElementById('voteButtons');
 const audioSection = document.getElementById('audioSection');
 const remoteAudio = document.getElementById('remoteAudio');
+const hostControls = document.getElementById('hostControls');
+const startGameBtn = document.getElementById('startGameBtn');
 
 // サイドバー生成（なければ追加）
 let sidebar = document.getElementById('sidebar');
@@ -73,6 +76,7 @@ socket.on('room_created', data => {
     console.log('room_created event received:', data);
     roomId = data.room_id;
     playerId = data.player_id;
+    isHost = true; // ルーム作成者はホスト
     // 画面切り替えはplayer_joinedイベントで行う
 });
 
@@ -90,6 +94,11 @@ socket.on('player_joined', data => {
         entrySection.style.display = 'none';
         gameSection.style.display = '';
         roomInfo.textContent = `ルームID: ${roomId}`;
+        
+        // ホストの場合、ゲームスタートボタンを表示
+        if (isHost && hostControls) {
+            hostControls.style.display = '';
+        }
     }
     
     // サイドバーに参加者を縦並びで表示
@@ -132,11 +141,41 @@ socket.on('player_left', data => {
     }
 });
 
+// ゲームスタートボタンの処理
+if (startGameBtn) {
+    startGameBtn.onclick = () => {
+        if (!isHost || !roomId) {
+            alert('ゲームを開始できません');
+            return;
+        }
+        
+        // 最低人数チェック（クライアントサイド）
+        const playerCount = sidebarPlayers ? sidebarPlayers.children.length : 0;
+        if (playerCount < 3) {
+            alert('ゲームを開始するには最低3人必要です');
+            return;
+        }
+        
+        socket.emit('start_game', { room_id: roomId });
+        startGameBtn.disabled = true;
+        startGameBtn.textContent = 'ゲーム開始中...';
+    };
+}
+
 // ゲーム開始
-// (ホストが開始ボタンを押すUIは省略、サーバー側でstart_gameをemit)
 socket.on('game_started', data => {
+    console.log('game_started event received:', data);
     phaseInfo.textContent = `フェーズ: ${data.phase}`;
+    
+    // ゲームスタートボタンを非表示
+    if (hostControls) {
+        hostControls.style.display = 'none';
+    }
+    
     // 投票UIや役職UIの初期化
+    if (voteSection) {
+        voteSection.style.display = '';
+    }
 });
 
 // 役職配布
@@ -171,6 +210,18 @@ socket.on('chat_message', data => {
     div.textContent = `${data.player_name}: ${data.message}`;
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+// エラーハンドリング
+socket.on('error', data => {
+    console.error('Server error:', data);
+    alert(data.message || 'エラーが発生しました');
+    
+    // ゲームスタートボタンを再有効化
+    if (startGameBtn && startGameBtn.disabled) {
+        startGameBtn.disabled = false;
+        startGameBtn.textContent = 'ゲーム開始';
+    }
 });
 
 // 投票UI

@@ -26,9 +26,12 @@
         <!-- ゲーム画面 -->
         <div id="game-section" style="display:none;">
             <div id="roomInfo"></div>
-            <div id="phaseInfo"></div>
+            <div id="phaseInfo">フェーズ: 待機中</div>
             <div id="roleInfo"></div>
             <div id="playerList"></div>
+            <div id="hostControls" style="display:none;">
+                <button id="startGameBtn" style="background-color: #4CAF50; color: white; padding: 10px 20px; margin: 10px 0; border: none; border-radius: 5px; cursor: pointer;">ゲーム開始</button>
+            </div>
             <div id="audioSection">
                 <audio id="remoteAudio" autoplay></audio>
             </div>
