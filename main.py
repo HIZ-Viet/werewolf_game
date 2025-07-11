@@ -349,7 +349,6 @@ async def process_voting(room: GameRoom, runoff_candidates=None):
         # 決選投票フェーズ
         room.phase = GamePhase.VOTING
         room.votes = {}  # 投票リセット
-        # 決選投票対象者のみ送信
         candidates_info = [
             {'id': pid, 'name': room.players[pid].name} for pid in executed_players
         ]
@@ -358,17 +357,14 @@ async def process_voting(room: GameRoom, runoff_candidates=None):
             'vote_counts': vote_counts,
             'runoff_candidates': candidates_info
         }, room=room.id)
-        # 決選投票用の投票対象をroomに記録
         room.runoff_candidates = executed_players
         return
-    # 決選投票中で再度同数なら追放者なし
     if runoff_candidates is not None and len(executed_players) > 1:
         await sio.emit('voting_result', {
             'executed_players': [],
             'vote_counts': vote_counts,
             'runoff_candidates': []
         }, room=room.id)
-        # 生存者リスト送信
         alive_players = [p for p in room.players.values() if p.is_alive]
         await sio.emit('update_alive_players', {
             'alive_players': [{'id': p.id, 'name': p.name} for p in alive_players]
@@ -388,6 +384,12 @@ async def process_voting(room: GameRoom, runoff_candidates=None):
         'executed_players_info': executed_players_info,
         'vote_counts': vote_counts,
         'alive_players': [{'id': p.id, 'name': p.name} for p in alive_players]
+    }, room=room.id)
+    # 10秒待ってから夜フェーズへ
+    await asyncio.sleep(10)
+    room.phase = GamePhase.NIGHT
+    await sio.emit('phase_changed', {
+        'phase': room.phase.value
     }, room=room.id)
     await check_game_end(room)
 
