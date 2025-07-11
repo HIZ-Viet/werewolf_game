@@ -131,6 +131,10 @@ socket.on('player_joined', data => {
     if (data.players) {
         playerList.innerHTML = '参加者: ' + data.players.map(p => p.name).join(', ');
     }
+
+    if (data.player_id && (!playerId || playerId === "")) {
+        playerId = data.player_id;
+    }
 });
 
 // プレイヤー退出
@@ -217,6 +221,11 @@ socket.on('game_started', data => {
                 updateRoleChats(myRoleInfo.role);
             }
         }
+    }
+
+    if (!playerId && data.players) {
+        const me = data.players.find(p => p.name === playerNameInput.value.trim());
+        if (me) playerId = me.id;
     }
 });
 
