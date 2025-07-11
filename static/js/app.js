@@ -583,10 +583,16 @@ function showDayPhaseScreen(dayNum, remainSec) {
     dayPhaseTitle.textContent = `${dayNum}日目 昼`;
     updateDayPhaseTimer(remainSec);
     gameSection.style.display = 'none';
+    // サイドバーは必ず表示
     sidebar.style.display = '';
     // 画像を必ず表示
     const img = document.getElementById('discussionImg');
     if (img) img.src = '/static/img/discussion.png';
+}
+function hideDayPhaseScreen() {
+    if (dayPhaseScreen) dayPhaseScreen.style.display = 'none';
+    // サイドバーは非表示にしない（常時表示）
+    gameSection.style.display = '';
 }
 function updateDayPhaseTimer(sec) {
     if (dayPhaseTimer) clearInterval(dayPhaseTimer);
