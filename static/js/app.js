@@ -663,28 +663,46 @@ function showVotingUI_VotePhase(alivePlayers, runoffCandidates) {
     });
 }
 
-// phase_changed修正
+// 新しい昼フェーズ表示エリア制御
+const dayPhaseArea = document.getElementById('dayPhaseArea');
+const dayPhaseImg = document.getElementById('dayPhaseImg');
+const dayPhaseLabel = document.getElementById('dayPhaseLabel');
+const dayPhaseTimerArea = document.getElementById('dayPhaseTimerArea');
+let dayPhaseAreaTimer = null;
+function showDayPhaseArea(dayNum, remainSec) {
+    if (!dayPhaseArea) return;
+    dayPhaseArea.style.display = '';
+    dayPhaseLabel.textContent = `${dayNum}日目 昼`;
+    if (dayPhaseImg) dayPhaseImg.src = '/static/img/discussion.png';
+    updateDayPhaseAreaTimer(remainSec);
+}
+function hideDayPhaseArea() {
+    if (dayPhaseArea) dayPhaseArea.style.display = 'none';
+    if (dayPhaseAreaTimer) clearInterval(dayPhaseAreaTimer);
+}
+function updateDayPhaseAreaTimer(sec) {
+    if (dayPhaseAreaTimer) clearInterval(dayPhaseAreaTimer);
+    let remain = sec;
+    if (dayPhaseTimerArea) dayPhaseTimerArea.textContent = `残り ${formatTime(remain)}`;
+    dayPhaseAreaTimer = setInterval(() => {
+        remain--;
+        if (dayPhaseTimerArea) dayPhaseTimerArea.textContent = `残り ${formatTime(remain)}`;
+        if (remain <= 0) {
+            clearInterval(dayPhaseAreaTimer);
+            hideDayPhaseArea();
+        }
+    }, 1000);
+}
+// phase_changedイベントで新しい昼フェーズエリアを制御
 socket.on('phase_changed', data => {
     currentPhase = data.phase;
     if (data.phase === 'day') {
-        showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
-        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
-        updateMyRoleArea(role);
+        showDayPhaseArea(data.day_num || 1, (data.day_time || 5) * 60);
+        // 旧dayPhaseScreenは使わない
     } else {
-        hideDayPhaseScreen();
+        hideDayPhaseArea();
     }
-    if (data.phase === 'voting') {
-        showVotePhaseScreen((data.voting_time || 60));
-        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
-        updateMyRoleArea(role);
-        if (data.alive_players) {
-            // 決選投票候補があればそれのみ渡す
-            showVotingUI_VotePhase(data.alive_players, data.runoff_candidates);
-        }
-    } else {
-        hideVotePhaseScreen();
-    }
-    // ...生存者一覧更新など既存の処理...
+    // ...既存の他フェーズ処理...
 });
 
 socket.on('role_assigned', data => {
