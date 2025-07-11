@@ -598,6 +598,20 @@ async def player_ready(sid, data):
             }, room=room_id)
         asyncio.create_task(day_to_voting())
 
+@sio.event
+async def update_room_settings(sid, data):
+    room_id = data.get('room_id')
+    if not room_id or room_id not in rooms:
+        return
+    room = rooms[room_id]
+    if 'role_distribution' in data:
+        room.role_distribution = data['role_distribution']
+    if 'day_time' in data:
+        room.day_time = data['day_time']
+    if 'night_time' in data:
+        room.night_time = data['night_time']
+    await sio.emit('room_settings_updated', {}, room=room_id)
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:socket_app",

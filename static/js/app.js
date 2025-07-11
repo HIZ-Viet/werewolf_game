@@ -35,6 +35,8 @@ const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
 const dayTime = document.getElementById('dayTime');
 const nightTime = document.getElementById('nightTime');
+const updateSettingsBtn = document.getElementById('updateSettingsBtn');
+const settingsUpdatedMsg = document.getElementById('settingsUpdatedMsg');
 
 // 役職チャット用サイドバー（ゲーム開始後に表示）
 let sidebar = document.getElementById('sidebar');
@@ -704,4 +706,28 @@ function updateDayPhaseTimer(sec) {
             }
         }
     }, 1000);
+} 
+
+if (updateSettingsBtn) {
+    updateSettingsBtn.onclick = () => {
+        const settings = {
+            room_id: roomId,
+            role_distribution: {
+                '村人': parseInt(villagerCount.value),
+                '人狼': parseInt(werewolfCount.value),
+                '占い師': parseInt(seerCount.value),
+                '騎士': parseInt(knightCount.value),
+                '霊媒師': parseInt(mediumCount.value)
+            },
+            day_time: dayTime ? parseInt(dayTime.value) : 5,
+            night_time: nightTime ? parseInt(nightTime.value) : 2
+        };
+        socket.emit('update_room_settings', settings);
+    };
+    socket.on('room_settings_updated', () => {
+        if (settingsUpdatedMsg) {
+            settingsUpdatedMsg.style.display = '';
+            setTimeout(() => { settingsUpdatedMsg.style.display = 'none'; }, 2000);
+        }
+    });
 } 
