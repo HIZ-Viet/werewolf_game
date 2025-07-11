@@ -10,6 +10,7 @@ import uuid
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, asdict, field
 from enum import Enum
+import asyncio
 
 # FastAPIアプリケーション
 app = FastAPI(title="人狼ゲーム", version="1.0.0")
@@ -66,6 +67,8 @@ class GameRoom:
     max_players: int = 15
     discussion_time: int = 300  # 5分
     ready_players: Set[str] = field(default_factory=set)  # 準備完了したプレイヤーのset
+    day_time: int = 5  # 昼フェーズ分数
+    night_time: int = 2  # 夜フェーズ分数
 
 # ゲームデータ
 rooms: Dict[str, GameRoom] = {}
@@ -137,7 +140,9 @@ async def create_room(sid, data):
         discussion_time=data.get('discussion_time', 300),
         votes={},
         night_actions={},
-        game_log=[]
+        game_log=[],
+        day_time=data.get('day_time', 5),
+        night_time=data.get('night_time', 2)
     )
     
     rooms[room_id] = room
@@ -228,6 +233,10 @@ async def start_game(sid, data):
     # 役職設定を更新（クライアントから送信された場合）
     if 'role_distribution' in data:
         room.role_distribution = data['role_distribution']
+    if 'day_time' in data:
+        room.day_time = data['day_time']
+    if 'night_time' in data:
+        room.night_time = data['night_time']
     
     # 最低人数チェック
     if len(room.players) < 3:
@@ -320,25 +329,19 @@ async def submit_vote(sid, data):
         await process_voting(room)
 
 async def process_voting(room: GameRoom):
-    """投票処理"""
     vote_counts = {}
     for target_id in room.votes.values():
         vote_counts[target_id] = vote_counts.get(target_id, 0) + 1
-    
-    # 最多票のプレイヤーを処刑
     max_votes = max(vote_counts.values())
     executed_players = [player_id for player_id, votes in vote_counts.items() if votes == max_votes]
-    
     for player_id in executed_players:
         room.players[player_id].is_alive = False
+        room.players[player_id].is_muted = True
         room.game_log.append(f"{room.players[player_id].name}が処刑されました")
-    
     await sio.emit('voting_result', {
         'executed_players': executed_players,
         'vote_counts': vote_counts
     }, room=room.id)
-    
-    # 勝敗判定
     await check_game_end(room)
 
 async def check_game_end(room: GameRoom):
@@ -526,13 +529,21 @@ async def player_ready(sid, data):
     
     # 全員準備完了チェック
     if len(room.ready_players) >= len(room.players):
-        # 1日目の夜フェーズ開始
-        room.phase = GamePhase.NIGHT
-        await sio.emit('all_ready', {
-            'phase': room.phase.value
+        # 1日目の昼フェーズ開始
+        room.phase = GamePhase.DAY
+        await sio.emit('phase_changed', {
+            'phase': room.phase.value,
+            'day_time': room.day_time
         }, room=room_id)
-        
-        print(f"All players ready in room {room_id}, starting night phase")
+        print(f"All players ready in room {room_id}, starting day phase")
+        # 昼フェーズ終了後に投票フェーズへ
+        async def day_to_voting():
+            await asyncio.sleep(room.day_time * 60)
+            room.phase = GamePhase.VOTING
+            await sio.emit('phase_changed', {
+                'phase': room.phase.value
+            }, room=room_id)
+        asyncio.create_task(day_to_voting())
 
 if __name__ == "__main__":
     uvicorn.run(

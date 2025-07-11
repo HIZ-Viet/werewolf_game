@@ -10,6 +10,8 @@ let playerId = null;
 let role = null;
 let isHost = false;
 let myRoleInfo = null;
+let dayPhaseTimer = null;
+let isDead = false;
 
 // UI要素
 const entrySection = document.getElementById('entry-section');
@@ -31,6 +33,8 @@ const audioSection = document.getElementById('audioSection');
 const remoteAudio = document.getElementById('remoteAudio');
 const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
+const dayTime = document.getElementById('dayTime');
+const nightTime = document.getElementById('nightTime');
 
 // 役職チャット用サイドバー（ゲーム開始後に表示）
 let sidebar = document.getElementById('sidebar');
@@ -85,7 +89,9 @@ createRoomBtn.onclick = () => {
     socket.emit('create_room', {
         host_name: name,
         role_distribution: { '村人': 8, '人狼': 2, '占い師': 1, '騎士': 1, '霊媒師': 1 },
-        discussion_time: 300
+        discussion_time: 300,
+        day_time: dayTime ? parseInt(dayTime.value) : 5,
+        night_time: nightTime ? parseInt(nightTime.value) : 2
     });
 };
 
@@ -174,7 +180,9 @@ if (startGameBtn) {
         
         socket.emit('start_game', { 
             room_id: roomId,
-            role_distribution: roleDistribution
+            role_distribution: roleDistribution,
+            day_time: dayTime ? parseInt(dayTime.value) : 5,
+            night_time: nightTime ? parseInt(nightTime.value) : 2
         });
         startGameBtn.disabled = true;
         startGameBtn.textContent = 'ゲーム開始中...';
@@ -261,13 +269,39 @@ socket.on('role_assigned', data => {
 // フェーズ変更
 socket.on('phase_changed', data => {
     phaseInfo.textContent = `フェーズ: ${data.phase}`;
-    // 音声ミュート制御など
+    if (data.phase === 'voting') {
+        showVotingUI();
+    }
+    if (data.phase === 'day') {
+        const dayTimeSec = (data.day_time || 5) * 60;
+        showDayPhaseTimer(dayTimeSec);
+    }
     if (data.phase === 'night' && role !== '人狼') {
         setAudioMute(true);
     } else {
         setAudioMute(false);
     }
 });
+
+function showDayPhaseTimer(seconds) {
+    if (dayPhaseTimer) clearInterval(dayPhaseTimer);
+    let remain = seconds;
+    phaseInfo.innerHTML = `フェーズ: 昼（残り <span id="dayTimer">${formatTime(remain)}</span>）`;
+    dayPhaseTimer = setInterval(() => {
+        remain--;
+        const timerSpan = document.getElementById('dayTimer');
+        if (timerSpan) timerSpan.textContent = formatTime(remain);
+        if (remain <= 0) {
+            clearInterval(dayPhaseTimer);
+            // 投票UIはサーバーからphase_changed: votingが来たときに表示
+        }
+    }, 1000);
+}
+function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 // チャット
 sendChatBtn.onclick = () => {
@@ -300,7 +334,14 @@ socket.on('vote_submitted', data => {
     // 投票状況の更新
 });
 socket.on('voting_result', data => {
-    // 投票結果の表示
+    if (data.executed_players && data.executed_players.length > 0) {
+        if (data.executed_players.includes(playerId)) {
+            isDead = true;
+            setAudioMute(true);
+            showUnmuteButton();
+            alert('あなたは処刑されました。マイクは自動でミュートされました。');
+        }
+    }
 });
 
 // WebRTC音声通話（雛形）
@@ -376,6 +417,36 @@ function updateRoleChats(playerRole) {
 function openRoleChat(chatType) {
     // この機能は後で実装
     alert(`${chatType} チャットを開きます（機能は後で実装予定）`);
+}
+
+function showVotingUI() {
+    if (!voteSection) return;
+    voteSection.style.display = '';
+    voteButtons.innerHTML = '';
+    // 仮実装: プレイヤーリストから生存者のみ投票ボタンを生成
+    const names = playerList.textContent.replace('参加者: ', '').split(',').map(s => s.trim());
+    names.forEach(name => {
+        if (name && name !== playerNameInput.value.trim()) {
+            const btn = document.createElement('button');
+            btn.textContent = name;
+            btn.onclick = () => {
+                socket.emit('submit_vote', { room_id: roomId, target_name: name });
+                voteButtons.innerHTML = '投票済み';
+            };
+            voteButtons.appendChild(btn);
+        }
+    });
+}
+
+function showUnmuteButton() {
+    let btn = document.getElementById('unmuteBtn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'unmuteBtn';
+        btn.textContent = 'マイク解除';
+        btn.onclick = () => setAudioMute(false);
+        audioSection.appendChild(btn);
+    }
 }
 
 // 準備完了ボタンの処理
