@@ -307,34 +307,16 @@ socket.on('phase_changed', data => {
     }
     if (data.phase === 'day') {
         const dayTimeSec = (data.day_time || 5) * 60;
-        showDayPhaseTimer(dayTimeSec);
+        showDayPhaseArea(data.day_num || 1, dayTimeSec);
+    } else {
+        hideDayPhaseArea();
     }
     if (data.phase === 'night' && role !== '人狼') {
         setAudioMute(true);
     } else {
         setAudioMute(false);
     }
-
-    // 4. 昼フェーズ専用画面
-    const dayPhaseScreen = document.getElementById('dayPhaseScreen');
-    const dayPhaseTitle = document.getElementById('dayPhaseTitle');
-    const dayPhaseTimerElem = document.getElementById('dayPhaseTimer');
-
-    if (data.phase === 'day') {
-        showDayPhaseScreen(data.day_num || 1, (data.day_time || 5) * 60);
-        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
-        updateMyRoleArea(role);
-    } else {
-        hideDayPhaseScreen();
-    }
-    if (data.phase === 'voting') {
-        showVotePhaseScreen((data.voting_time || 60));
-        updateSidebarRoleInfo(role, myRoleInfo ? myRoleInfo.description : '');
-        updateMyRoleArea(role);
-    } else {
-        hideVotePhaseScreen();
-    }
-    // 生存者一覧更新（サーバーから生存者リストをもらうのが理想だが、現状はplayerListから取得）
+    // 生存者一覧更新
     if (alivePlayers && playerList.textContent) {
         const names = playerList.textContent.replace('参加者: ', '').split(',').map(s => s.trim()).filter(Boolean);
         updateAlivePlayers(names);
@@ -576,93 +558,6 @@ function updateMyRoleArea(role) {
     if (myRoleArea) myRoleArea.textContent = role ? `役職：${role}` : '';
 }
 
-// 2. 昼フェーズカウントダウン
-// showDayPhaseScreen: サイドバー常時表示＆カウントダウン必ず動作
-function showDayPhaseScreen(dayNum, remainSec) {
-    if (!dayPhaseScreen) return;
-    dayPhaseScreen.style.display = 'flex';
-    dayPhaseTitle.textContent = `${dayNum}日目 昼`;
-    updateDayPhaseTimer(remainSec);
-    gameSection.style.display = 'none';
-    // サイドバーは必ず表示
-    if (sidebar) sidebar.style.display = '';
-    // 画像を必ず表示
-    const img = document.getElementById('discussionImg');
-    if (img) img.src = '/static/img/discussion.png';
-}
-function hideDayPhaseScreen() {
-    if (dayPhaseScreen) dayPhaseScreen.style.display = 'none';
-    // サイドバーは非表示にしない（常時表示）
-    gameSection.style.display = '';
-}
-function updateDayPhaseTimer(sec) {
-    if (dayPhaseTimer) clearInterval(dayPhaseTimer);
-    let remain = sec;
-    if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
-    dayPhaseTimer = setInterval(() => {
-        remain--;
-        if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
-        if (remain <= 0) {
-            clearInterval(dayPhaseTimer);
-            hideDayPhaseScreen();
-        }
-    }, 1000);
-}
-
-// 3. 投票フェーズ専用画面
-const votePhaseScreen = document.getElementById('votePhaseScreen');
-const votePhaseTimerElem = document.getElementById('votePhaseTimer');
-const votePhaseUI = document.getElementById('votePhaseUI');
-let votePhaseTimer = null;
-function showVotePhaseScreen(remainSec) {
-    if (!votePhaseScreen) return;
-    votePhaseScreen.style.display = 'flex';
-    sidebar.style.display = '';
-    updateVotePhaseTimer(remainSec);
-    showVotingUI(votePhaseUI);
-    gameSection.style.display = 'none';
-}
-function hideVotePhaseScreen() {
-    if (votePhaseScreen) votePhaseScreen.style.display = 'none';
-    gameSection.style.display = '';
-}
-function updateVotePhaseTimer(sec) {
-    if (votePhaseTimer) clearInterval(votePhaseTimer);
-    let remain = sec;
-    if (votePhaseTimerElem) votePhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
-    votePhaseTimer = setInterval(() => {
-        remain--;
-        if (votePhaseTimerElem) votePhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
-        if (remain <= 0) {
-            clearInterval(votePhaseTimer);
-            hideVotePhaseScreen();
-        }
-    }, 1000);
-}
-
-// 投票フェーズ専用画面の投票ボタン生成
-// 決選投票時はrunoff_candidatesのみ投票ボタンを表示
-function showVotingUI_VotePhase(alivePlayers, runoffCandidates) {
-    if (!votePhaseUI) return;
-    votePhaseUI.innerHTML = '';
-    let targetList = alivePlayers;
-    if (runoffCandidates && Array.isArray(runoffCandidates) && runoffCandidates.length > 0) {
-        targetList = runoffCandidates;
-    }
-    if (!targetList || !Array.isArray(targetList)) return;
-    targetList.forEach(player => {
-        if (player.id !== playerId) {
-            const btn = document.createElement('button');
-            btn.textContent = player.name;
-            btn.onclick = () => {
-                socket.emit('submit_vote', { room_id: roomId, target_id: player.id });
-                votePhaseUI.innerHTML = '投票済み';
-            };
-            votePhaseUI.appendChild(btn);
-        }
-    });
-}
-
 // 新しい昼フェーズ表示エリア制御
 const dayPhaseArea = document.getElementById('dayPhaseArea');
 const dayPhaseImg = document.getElementById('dayPhaseImg');
@@ -693,52 +588,29 @@ function updateDayPhaseAreaTimer(sec) {
         }
     }, 1000);
 }
-// phase_changedイベントで新しい昼フェーズエリアを制御
-socket.on('phase_changed', data => {
-    currentPhase = data.phase;
-    if (data.phase === 'day') {
-        showDayPhaseArea(data.day_num || 1, (data.day_time || 5) * 60);
-        // 旧dayPhaseScreenは使わない
-    } else {
-        hideDayPhaseArea();
+
+// 投票フェーズ専用画面の投票ボタン生成
+// 決選投票時はrunoff_candidatesのみ投票ボタンを表示
+function showVotingUI_VotePhase(alivePlayers, runoffCandidates) {
+    if (!votePhaseUI) return;
+    votePhaseUI.innerHTML = '';
+    let targetList = alivePlayers;
+    if (runoffCandidates && Array.isArray(runoffCandidates) && runoffCandidates.length > 0) {
+        targetList = runoffCandidates;
     }
-    // ...既存の他フェーズ処理...
-});
-
-socket.on('role_assigned', data => {
-    myRoleInfo = data;
-    role = data.role;
-    updateSidebarRoleInfo(data.role, data.description);
-    updateMyRoleArea(data.role);
-    // ...既存の処理...
-});
-
-// 4. 昼フェーズ専用画面
-function showDayPhaseScreen(dayNum, remainSec) {
-    if (!dayPhaseScreen) return;
-    dayPhaseScreen.style.display = 'flex';
-    dayPhaseTitle.textContent = `${dayNum}日目 昼`;
-    updateDayPhaseTimer(remainSec);
-    gameSection.style.display = 'none';
-}
-function hideDayPhaseScreen() {
-    if (dayPhaseScreen) dayPhaseScreen.style.display = 'none';
-    gameSection.style.display = '';
-}
-function updateDayPhaseTimer(sec) {
-    if (dayPhaseTimer) clearInterval(dayPhaseTimer);
-    let remain = sec;
-    dayPhaseTimer = setInterval(() => {
-        if (dayPhaseTimer) {
-            remain--;
-            if (dayPhaseTimerElem) dayPhaseTimerElem.textContent = `残り ${formatTime(remain)}`;
-            if (remain <= 0) {
-                clearInterval(dayPhaseTimer);
-                hideDayPhaseScreen();
-            }
+    if (!targetList || !Array.isArray(targetList)) return;
+    targetList.forEach(player => {
+        if (player.id !== playerId) {
+            const btn = document.createElement('button');
+            btn.textContent = player.name;
+            btn.onclick = () => {
+                socket.emit('submit_vote', { room_id: roomId, target_id: player.id });
+                votePhaseUI.innerHTML = '投票済み';
+            };
+            votePhaseUI.appendChild(btn);
         }
-    }, 1000);
-} 
+    });
+}
 
 if (updateSettingsBtn) {
     updateSettingsBtn.onclick = () => {
