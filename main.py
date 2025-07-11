@@ -69,6 +69,7 @@ class GameRoom:
     ready_players: Set[str] = field(default_factory=set)  # 準備完了したプレイヤーのset
     day_time: int = 5  # 昼フェーズ分数
     night_time: int = 2  # 夜フェーズ分数
+    runoff_candidates: List[str] = field(default_factory=list)  # 決選投票候補
 
 # ゲームデータ
 rooms: Dict[str, GameRoom] = {}
@@ -315,6 +316,10 @@ async def submit_vote(sid, data):
     if not player.is_alive:
         return
     
+    # 決選投票中は対象者のみ投票可
+    if hasattr(room, 'runoff_candidates') and room.runoff_candidates:
+        if target_id not in room.runoff_candidates:
+            return
     room.votes[player_id] = target_id
     player.vote_target = target_id
     
@@ -326,21 +331,63 @@ async def submit_vote(sid, data):
     # 全員投票済みかチェック
     alive_players = [p for p in room.players.values() if p.is_alive]
     if len(room.votes) >= len(alive_players):
-        await process_voting(room)
+        # 決選投票中かどうかで分岐
+        if hasattr(room, 'runoff_candidates') and room.runoff_candidates:
+            await process_voting(room, runoff_candidates=room.runoff_candidates)
+            room.runoff_candidates = []
+        else:
+            await process_voting(room)
 
-async def process_voting(room: GameRoom):
+async def process_voting(room: GameRoom, runoff_candidates=None):
     vote_counts = {}
     for target_id in room.votes.values():
         vote_counts[target_id] = vote_counts.get(target_id, 0) + 1
     max_votes = max(vote_counts.values())
     executed_players = [player_id for player_id, votes in vote_counts.items() if votes == max_votes]
+    # 決選投票でなければ、同数時は決選投票へ
+    if runoff_candidates is None and len(executed_players) > 1:
+        # 決選投票フェーズ
+        room.phase = GamePhase.VOTING
+        room.votes = {}  # 投票リセット
+        # 決選投票対象者のみ送信
+        candidates_info = [
+            {'id': pid, 'name': room.players[pid].name} for pid in executed_players
+        ]
+        await sio.emit('voting_result', {
+            'executed_players': [],
+            'vote_counts': vote_counts,
+            'runoff_candidates': candidates_info
+        }, room=room.id)
+        # 決選投票用の投票対象をroomに記録
+        room.runoff_candidates = executed_players
+        return
+    # 決選投票中で再度同数なら追放者なし
+    if runoff_candidates is not None and len(executed_players) > 1:
+        await sio.emit('voting_result', {
+            'executed_players': [],
+            'vote_counts': vote_counts,
+            'runoff_candidates': []
+        }, room=room.id)
+        # 生存者リスト送信
+        alive_players = [p for p in room.players.values() if p.is_alive]
+        await sio.emit('update_alive_players', {
+            'alive_players': [{'id': p.id, 'name': p.name} for p in alive_players]
+        }, room=room.id)
+        return
+    # 通常追放処理
     for player_id in executed_players:
         room.players[player_id].is_alive = False
         room.players[player_id].is_muted = True
         room.game_log.append(f"{room.players[player_id].name}が処刑されました")
+    executed_players_info = [
+        {'id': pid, 'name': room.players[pid].name} for pid in executed_players
+    ]
+    alive_players = [p for p in room.players.values() if p.is_alive]
     await sio.emit('voting_result', {
         'executed_players': executed_players,
-        'vote_counts': vote_counts
+        'executed_players_info': executed_players_info,
+        'vote_counts': vote_counts,
+        'alive_players': [{'id': p.id, 'name': p.name} for p in alive_players]
     }, room=room.id)
     await check_game_end(room)
 
@@ -433,7 +480,8 @@ async def process_night_actions(room: GameRoom):
     room.phase = GamePhase.DAY
     await sio.emit('phase_changed', {
         'phase': room.phase.value,
-        'game_log': room.game_log[-5:]  # 最新5件
+        'game_log': room.game_log[-5:],  # 最新5件
+        'day_time': room.day_time
     }, room=room.id)
 
 @sio.event

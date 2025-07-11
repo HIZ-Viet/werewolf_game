@@ -387,14 +387,36 @@ socket.on('error', data => {
 socket.on('vote_submitted', data => {
     // 投票状況の更新
 });
+// 投票結果表示用
+function showVoteResult(message) {
+    if (!votePhaseUI) return;
+    votePhaseUI.innerHTML = `<div style="font-size:1.5rem;margin:24px 0;">${message}</div>`;
+}
+
+// 投票結果受信時の処理
 socket.on('voting_result', data => {
+    // 追放者発表
     if (data.executed_players && data.executed_players.length > 0) {
+        const executedNames = (data.executed_players_info || []).map(p => p.name).join('、');
+        showVoteResult(`今日の追放者は…<br><b>${executedNames}さん</b>です。`);
         if (data.executed_players.includes(playerId)) {
             isDead = true;
             setAudioMute(true);
             showUnmuteButton();
-            alert('あなたは処刑されました。マイクは自動でミュートされました。');
+            setTimeout(() => {
+                alert('あなたは処刑されました。マイクは自動でミュートされました。');
+            }, 500);
         }
+    } else if (data.runoff_candidates && data.runoff_candidates.length > 0) {
+        // 決選投票発表
+        const names = data.runoff_candidates.map(p => p.name).join('、');
+        showVoteResult(`同票のため決選投票を行います。<br>対象: <b>${names}さん</b>`);
+    } else {
+        showVoteResult('本日は追放者なし');
+    }
+    // サイドバー生存者リスト更新
+    if (data.alive_players) {
+        updateAlivePlayers(data.alive_players.map(p => p.name));
     }
 });
 
