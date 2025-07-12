@@ -329,7 +329,6 @@ function updateVotePhaseAreaTimer(sec) {
         if (votePhaseTimerArea) votePhaseTimerArea.textContent = `残り ${formatTime(remain)}`;
         if (remain <= 0) {
             clearInterval(votePhaseAreaTimer);
-            // タイムアップ時の処理はサーバーからのphase_changedで制御
         }
     }, 1000);
 }
@@ -443,33 +442,23 @@ socket.on('voting_result', data => {
         const executedNames = (data.executed_players_info || []).map(p => p.name).join('、');
         voteResultMsg.innerHTML = `今回処刑されるのは…<br><b>${executedNames}さん</b>です。`;
         votePhaseUI.innerHTML = '';
-        // 10秒間表示→自動で非表示
-        setTimeout(() => {
-            hideVotePhaseArea();
-        }, 10000);
-        // 追放者はマイク自動ミュート
+        setTimeout(() => { hideVotePhaseArea(); }, 10000);
         if (data.executed_players.includes(playerId)) {
             isDead = true;
             setAudioMute(true);
             showUnmuteButton();
-            setTimeout(() => {
-                alert('あなたは処刑されました。マイクは自動でミュートされました。');
-            }, 500);
+            setTimeout(() => { alert('あなたは処刑されました。マイクは自動でミュートされました。'); }, 500);
         }
-        // サイドバー生存者リスト更新
         if (data.alive_players) {
             updateAlivePlayers(data.alive_players.map(p => p.name));
         }
     } else if (data.runoff_candidates && data.runoff_candidates.length > 0) {
-        // 決選投票発表
         const names = data.runoff_candidates.map(p => p.name).join('、');
         voteResultMsg.innerHTML = `同票のため決選投票を行います。<br>対象: <b>${names}さん</b>`;
         showVotingButtons([], data.runoff_candidates);
     } else {
         voteResultMsg.innerHTML = '本日は追放者なし';
-        setTimeout(() => {
-            hideVotePhaseArea();
-        }, 5000);
+        setTimeout(() => { hideVotePhaseArea(); }, 5000);
         if (data.alive_players) {
             updateAlivePlayers(data.alive_players.map(p => p.name));
         }
@@ -482,7 +471,7 @@ async function startAudio() {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         // ここで各peerに音声を送信するWebRTCロジックを追加
     } catch (e) {
-        alert('マイクの利用が許可されていません');
+        alert('マイクの利用が許可されていません\n' + (e && e.message ? e.message : e));
     }
 }
 function setAudioMute(mute) {
