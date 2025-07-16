@@ -43,6 +43,7 @@ const remoteAudio = document.getElementById('remoteAudio');
 const audioStatus = document.getElementById('audioStatus');
 const muteBtn = document.getElementById('muteBtn');
 const unmuteBtn = document.getElementById('unmuteBtn');
+const enableAudioBtn = document.getElementById('enableAudioBtn');
 const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
 const dayTime = document.getElementById('dayTime');
@@ -190,6 +191,12 @@ socket.on('player_left', data => {
         pc.close();
         delete peerConnections[data.player_id];
         console.log('Closed WebRTC connection for player:', data.player_id);
+        
+        // プレイヤー専用の音声要素を削除
+        const playerAudio = document.getElementById(`audio-${data.player_id}`);
+        if (playerAudio) {
+            playerAudio.remove();
+        }
     }
     
     // プレイヤーリストを更新
@@ -557,6 +564,30 @@ if (unmuteBtn) {
     };
 }
 
+// 音声有効化ボタンのイベントリスナー
+if (enableAudioBtn) {
+    enableAudioBtn.onclick = async () => {
+        try {
+            // すべての音声要素を有効化
+            const audioElements = document.querySelectorAll('audio');
+            for (const audio of audioElements) {
+                audio.muted = false;
+                try {
+                    await audio.play();
+                } catch (e) {
+                    console.log('Audio play failed for element:', audio.id, e);
+                }
+            }
+            
+            enableAudioBtn.style.display = 'none';
+            updateAudioStatus('connected', '音声再生有効');
+        } catch (error) {
+            console.error('Error enabling audio:', error);
+            alert('音声の有効化に失敗しました。ページをタップしてから再度お試しください。');
+        }
+    };
+}
+
 // 接続状態の更新
 function updateAudioStatus(status, message) {
     if (audioStatus) {
@@ -799,10 +830,36 @@ async function createPeerConnection(peerId) {
 
     // リモートストリームの処理
     pc.ontrack = (event) => {
+        console.log('Received remote track from:', peerId);
         const remoteStream = event.streams[0];
-        if (remoteAudio) {
-            remoteAudio.srcObject = remoteStream;
+        
+        // プレイヤー専用の音声要素を作成
+        let playerAudio = document.getElementById(`audio-${peerId}`);
+        if (!playerAudio) {
+            playerAudio = document.createElement('audio');
+            playerAudio.id = `audio-${peerId}`;
+            playerAudio.autoplay = true;
+            playerAudio.playsinline = true;
+            playerAudio.muted = false;
+            playerAudio.volume = 1.0;
+            
+            // 音声要素をページに追加
+            if (audioSection) {
+                audioSection.appendChild(playerAudio);
+            }
         }
+        
+        // ストリームを設定
+        playerAudio.srcObject = remoteStream;
+        
+        // 音声再生を試行
+        playerAudio.play().catch(e => {
+            console.error('Error playing remote audio for', peerId, ':', e);
+            if (e.name === 'NotAllowedError') {
+                updateAudioStatus('error', '音声再生の許可が必要です。「音声有効化」ボタンをタップしてください。');
+            }
+        });
+        
         updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
     };
 

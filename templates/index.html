@@ -80,12 +80,13 @@
             </div>
             
             <div id="audioSection">
-                <audio id="remoteAudio" autoplay></audio>
+                <audio id="remoteAudio" autoplay playsinline muted></audio>
                 <div style="margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
                     <div style="font-weight: bold; margin-bottom: 5px;">音声通話</div>
                     <div id="audioStatus" style="font-size: 14px; color: #666; margin-bottom: 10px;">接続中...</div>
                     <button id="muteBtn" style="background-color: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">マイクOFF</button>
                     <button id="unmuteBtn" style="background-color: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; display: none;">マイクON</button>
+                    <button id="enableAudioBtn" style="background-color: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">音声有効化</button>
                 </div>
             </div>
             <div id="chatSection">
