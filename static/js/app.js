@@ -14,6 +14,14 @@ let dayPhaseTimer = null;
 let isDead = false;
 let currentPhase = null;
 
+// WebRTC設定
+const rtcConfig = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
 // UI要素
 const entrySection = document.getElementById('entry-section');
 const gameSection = document.getElementById('game-section');
@@ -32,6 +40,9 @@ const voteSection = document.getElementById('voteSection');
 const voteButtons = document.getElementById('voteButtons');
 const audioSection = document.getElementById('audioSection');
 const remoteAudio = document.getElementById('remoteAudio');
+const audioStatus = document.getElementById('audioStatus');
+const muteBtn = document.getElementById('muteBtn');
+const unmuteBtn = document.getElementById('unmuteBtn');
 const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
 const dayTime = document.getElementById('dayTime');
@@ -145,6 +156,11 @@ socket.on('player_joined', data => {
         playerId = data.player_id;
     }
 
+    // 新しいプレイヤーが参加した場合、WebRTC接続を確立
+    if (data.player_id && data.player_id !== playerId && localStream) {
+        createPeerConnection(data.player_id);
+    }
+
     // 1. ルーム入室時に自分の名前をmyNameに保存し、myNameAreaに表示。
     let myName = '';
     if (playerNameInput.value) myName = playerNameInput.value.trim();
@@ -167,6 +183,14 @@ socket.on('player_joined', data => {
 // プレイヤー退出
 socket.on('player_left', data => {
     console.log('player_left event received:', data);
+    
+    // WebRTC接続のクリーンアップ
+    if (data.player_id && peerConnections[data.player_id]) {
+        const pc = peerConnections[data.player_id];
+        pc.close();
+        delete peerConnections[data.player_id];
+        console.log('Closed WebRTC connection for player:', data.player_id);
+    }
     
     // プレイヤーリストを更新
     if (data.players) {
@@ -468,15 +492,77 @@ socket.on('voting_result', data => {
 // WebRTC音声通話（雛形）
 async function startAudio() {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // ここで各peerに音声を送信するWebRTCロジックを追加
+        updateAudioStatus('connecting', 'マイクにアクセス中...');
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        });
+        
+        // マイクボタンの初期状態を設定
+        if (muteBtn && unmuteBtn) {
+            muteBtn.style.display = 'inline-block';
+            unmuteBtn.style.display = 'none';
+        }
+        
+        // 既存のプレイヤーとの接続を確立
+        if (roomId && playerId) {
+            // ルーム内の他のプレイヤーとの接続を確立
+            socket.emit('get_room_players', { room_id: roomId });
+        }
+        
+        updateAudioStatus('connected', 'マイク接続済み - 他のプレイヤーを待機中');
+        console.log('Audio stream started successfully');
     } catch (e) {
-        alert('マイクの利用が許可されていません\n' + (e && e.message ? e.message : e));
+        console.error('Microphone access error:', e);
+        updateAudioStatus('error', 'マイクアクセスエラー');
+        if (e.name === 'NotAllowedError') {
+            alert('マイクの利用が許可されていません。ブラウザの設定でマイク権限を許可してください。\n\niPhoneの場合：\n1. 設定 > Safari > マイク > 許可\n2. または設定 > プライバシーとセキュリティ > マイク > Safari > 許可');
+        } else if (e.name === 'NotFoundError') {
+            alert('マイクが見つかりません。デバイスにマイクが接続されているか確認してください。');
+        } else {
+            alert('マイクの利用でエラーが発生しました：\n' + (e && e.message ? e.message : e));
+        }
     }
 }
 function setAudioMute(mute) {
     if (localStream) {
         localStream.getAudioTracks().forEach(track => track.enabled = !mute);
+        
+        // ボタンの表示を切り替え
+        if (muteBtn && unmuteBtn) {
+            if (mute) {
+                muteBtn.style.display = 'none';
+                unmuteBtn.style.display = 'inline-block';
+            } else {
+                muteBtn.style.display = 'inline-block';
+                unmuteBtn.style.display = 'none';
+            }
+        }
+    }
+}
+
+// マイクコントロールボタンのイベントリスナー
+if (muteBtn) {
+    muteBtn.onclick = () => {
+        setAudioMute(true);
+    };
+}
+
+if (unmuteBtn) {
+    unmuteBtn.onclick = () => {
+        setAudioMute(false);
+    };
+}
+
+// 接続状態の更新
+function updateAudioStatus(status, message) {
+    if (audioStatus) {
+        audioStatus.textContent = message || status;
+        audioStatus.style.color = status === 'connected' ? '#4CAF50' : 
+                                 status === 'connecting' ? '#FF9800' : '#f44336';
     }
 }
 
@@ -694,3 +780,133 @@ if (updateSettingsBtn) {
         }
     });
 } 
+
+// WebRTC接続作成
+async function createPeerConnection(peerId) {
+    if (peerConnections[peerId]) {
+        return; // 既に接続済み
+    }
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections[peerId] = pc;
+
+    // ローカルストリームを追加
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            pc.addTrack(track, localStream);
+        });
+    }
+
+    // リモートストリームの処理
+    pc.ontrack = (event) => {
+        const remoteStream = event.streams[0];
+        if (remoteAudio) {
+            remoteAudio.srcObject = remoteStream;
+        }
+        updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
+    };
+
+    // ICE候補の処理
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit('ice_candidate', {
+                room_id: roomId,
+                target_id: peerId,
+                candidate: event.candidate
+            });
+        }
+    };
+
+    // 接続状態の監視
+    pc.onconnectionstatechange = () => {
+        console.log(`Connection state with ${peerId}:`, pc.connectionState);
+        if (pc.connectionState === 'connected') {
+            updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
+        } else if (pc.connectionState === 'connecting') {
+            updateAudioStatus('connecting', '音声通話接続中...');
+        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+            updateAudioStatus('disconnected', '音声通話接続が切断されました');
+        }
+    };
+
+    // オファーを作成して送信
+    try {
+        updateAudioStatus('connecting', '音声通話接続中...');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        
+        socket.emit('offer', {
+            room_id: roomId,
+            target_id: peerId,
+            offer: offer
+        });
+    } catch (error) {
+        console.error('Error creating offer:', error);
+        updateAudioStatus('error', '音声通話接続エラー');
+    }
+}
+
+// オファー受信時の処理
+socket.on('offer', async (data) => {
+    const { from_id, offer } = data;
+    
+    if (!peerConnections[from_id]) {
+        await createPeerConnection(from_id);
+    }
+    
+    const pc = peerConnections[from_id];
+    
+    try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        socket.emit('answer', {
+            room_id: roomId,
+            target_id: from_id,
+            answer: answer
+        });
+    } catch (error) {
+        console.error('Error handling offer:', error);
+    }
+});
+
+// アンサー受信時の処理
+socket.on('answer', async (data) => {
+    const { from_id, answer } = data;
+    
+    const pc = peerConnections[from_id];
+    if (pc) {
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (error) {
+            console.error('Error handling answer:', error);
+        }
+    }
+});
+
+// ICE候補受信時の処理
+socket.on('ice_candidate', async (data) => {
+    const { from_id, candidate } = data;
+    
+    const pc = peerConnections[from_id];
+    if (pc) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            console.error('Error adding ICE candidate:', error);
+        }
+    }
+});
+
+// ルーム内プレイヤー取得時の処理
+socket.on('room_players', (data) => {
+    const { players } = data;
+    if (players && Array.isArray(players)) {
+        players.forEach(peerId => {
+            if (peerId !== playerId && localStream) {
+                createPeerConnection(peerId);
+            }
+        });
+    }
+}); 

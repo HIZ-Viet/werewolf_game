@@ -600,17 +600,135 @@ async def player_ready(sid, data):
 
 @sio.event
 async def update_room_settings(sid, data):
-    room_id = data.get('room_id')
-    if not room_id or room_id not in rooms:
+    """ルーム設定更新"""
+    room_id = data['room_id']
+    if room_id not in rooms:
         return
+    
     room = rooms[room_id]
-    if 'role_distribution' in data:
-        room.role_distribution = data['role_distribution']
+    if sid not in players_by_socket or players_by_socket[sid] != room.host_id:
+        return  # ホスト以外は設定変更不可
+    
+    # 設定を更新
     if 'day_time' in data:
         room.day_time = data['day_time']
     if 'night_time' in data:
         room.night_time = data['night_time']
-    await sio.emit('room_settings_updated', {}, room=room_id)
+    if 'role_distribution' in data:
+        room.role_distribution = data['role_distribution']
+    
+    # 設定更新通知
+    await sio.emit('settings_updated', {
+        'day_time': room.day_time,
+        'night_time': room.night_time,
+        'role_distribution': room.role_distribution
+    }, room=room_id)
+
+# WebRTCシグナリング処理
+@sio.event
+async def get_room_players(sid, data):
+    """ルーム内の他のプレイヤーを取得"""
+    room_id = data['room_id']
+    if room_id not in rooms:
+        return
+    
+    room = rooms[room_id]
+    current_player_id = players_by_socket.get(sid)
+    if not current_player_id:
+        return
+    
+    # 自分以外のプレイヤーIDを返す
+    other_players = [pid for pid in room.players.keys() if pid != current_player_id]
+    await sio.emit('room_players', {
+        'players': other_players
+    }, room=sid)
+
+@sio.event
+async def offer(sid, data):
+    """WebRTCオファーを転送"""
+    room_id = data['room_id']
+    target_id = data['target_id']
+    offer = data['offer']
+    
+    if room_id not in rooms:
+        return
+    
+    room = rooms[room_id]
+    from_player_id = players_by_socket.get(sid)
+    
+    if not from_player_id or target_id not in room.players:
+        return
+    
+    # ターゲットプレイヤーのsocket_idを取得
+    target_socket_id = None
+    for socket_id, player_id in players_by_socket.items():
+        if player_id == target_id:
+            target_socket_id = socket_id
+            break
+    
+    if target_socket_id:
+        await sio.emit('offer', {
+            'from_id': from_player_id,
+            'offer': offer
+        }, room=target_socket_id)
+
+@sio.event
+async def answer(sid, data):
+    """WebRTCアンサーを転送"""
+    room_id = data['room_id']
+    target_id = data['target_id']
+    answer = data['answer']
+    
+    if room_id not in rooms:
+        return
+    
+    room = rooms[room_id]
+    from_player_id = players_by_socket.get(sid)
+    
+    if not from_player_id or target_id not in room.players:
+        return
+    
+    # ターゲットプレイヤーのsocket_idを取得
+    target_socket_id = None
+    for socket_id, player_id in players_by_socket.items():
+        if player_id == target_id:
+            target_socket_id = socket_id
+            break
+    
+    if target_socket_id:
+        await sio.emit('answer', {
+            'from_id': from_player_id,
+            'answer': answer
+        }, room=target_socket_id)
+
+@sio.event
+async def ice_candidate(sid, data):
+    """ICE候補を転送"""
+    room_id = data['room_id']
+    target_id = data['target_id']
+    candidate = data['candidate']
+    
+    if room_id not in rooms:
+        return
+    
+    room = rooms[room_id]
+    from_player_id = players_by_socket.get(sid)
+    
+    if not from_player_id or target_id not in room.players:
+        return
+    
+    # ターゲットプレイヤーのsocket_idを取得
+    target_socket_id = None
+    for socket_id, player_id in players_by_socket.items():
+        if player_id == target_id:
+            target_socket_id = socket_id
+            break
+    
+    if target_socket_id:
+        await sio.emit('ice_candidate', {
+            'from_id': from_player_id,
+            'candidate': candidate
+        }, room=target_socket_id)
 
 if __name__ == "__main__":
     uvicorn.run(
