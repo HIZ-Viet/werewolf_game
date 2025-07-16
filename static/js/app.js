@@ -500,6 +500,8 @@ socket.on('voting_result', data => {
 async function startAudio() {
     try {
         updateAudioStatus('connecting', 'マイクにアクセス中...');
+        console.log('Requesting microphone access...');
+        
         localStream = await navigator.mediaDevices.getUserMedia({ 
             audio: {
                 echoCancellation: true,
@@ -507,6 +509,14 @@ async function startAudio() {
                 autoGainControl: true
             }
         });
+        
+        console.log('Microphone access granted');
+        console.log('Local stream tracks:', localStream.getTracks().map(t => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState
+        })));
         
         // マイクボタンの初期状態を設定
         if (muteBtn && unmuteBtn) {
@@ -516,6 +526,7 @@ async function startAudio() {
         
         // 既存のプレイヤーとの接続を確立
         if (roomId && playerId) {
+            console.log('Requesting room players for connection setup');
             // ルーム内の他のプレイヤーとの接続を確立
             socket.emit('get_room_players', { room_id: roomId });
         }
@@ -570,10 +581,13 @@ if (enableAudioBtn) {
         try {
             // すべての音声要素を有効化
             const audioElements = document.querySelectorAll('audio');
+            console.log('Found audio elements:', audioElements.length);
             for (const audio of audioElements) {
+                console.log('Enabling audio element:', audio.id);
                 audio.muted = false;
                 try {
                     await audio.play();
+                    console.log('Audio play successful for:', audio.id);
                 } catch (e) {
                     console.log('Audio play failed for element:', audio.id, e);
                 }
@@ -586,6 +600,45 @@ if (enableAudioBtn) {
             alert('音声の有効化に失敗しました。ページをタップしてから再度お試しください。');
         }
     };
+}
+
+// デバッグ用のテスト機能
+function addDebugButton() {
+    const debugBtn = document.createElement('button');
+    debugBtn.textContent = 'デバッグ情報';
+    debugBtn.style.cssText = 'background-color: #9C27B0; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;';
+    debugBtn.onclick = () => {
+        console.log('=== DEBUG INFO ===');
+        console.log('Local stream:', localStream);
+        console.log('Peer connections:', Object.keys(peerConnections));
+        console.log('Room ID:', roomId);
+        console.log('Player ID:', playerId);
+        console.log('Audio elements:', document.querySelectorAll('audio'));
+        
+        if (localStream) {
+            console.log('Local stream tracks:', localStream.getTracks().map(t => ({
+                kind: t.kind,
+                enabled: t.enabled,
+                muted: t.muted,
+                readyState: t.readyState
+            })));
+        }
+        
+        Object.keys(peerConnections).forEach(peerId => {
+            const pc = peerConnections[peerId];
+            console.log(`Peer ${peerId}:`, {
+                connectionState: pc.connectionState,
+                iceConnectionState: pc.iceConnectionState,
+                signalingState: pc.signalingState
+            });
+        });
+        
+        alert('デバッグ情報をコンソールに出力しました。F12キーで開発者ツールを開いて確認してください。');
+    };
+    
+    if (audioSection) {
+        audioSection.appendChild(debugBtn);
+    }
 }
 
 // 接続状態の更新
@@ -716,6 +769,7 @@ socket.on('all_ready', data => {
 // ページロード時に音声取得
 window.onload = () => {
     startAudio();
+    addDebugButton();
 }; 
 
 // 2. 役職名・説明
@@ -815,23 +869,36 @@ if (updateSettingsBtn) {
 // WebRTC接続作成
 async function createPeerConnection(peerId) {
     if (peerConnections[peerId]) {
+        console.log('Connection already exists for:', peerId);
         return; // 既に接続済み
     }
 
+    console.log('Creating peer connection for:', peerId);
     const pc = new RTCPeerConnection(rtcConfig);
     peerConnections[peerId] = pc;
 
     // ローカルストリームを追加
     if (localStream) {
+        console.log('Adding local stream tracks to peer connection');
         localStream.getTracks().forEach(track => {
+            console.log('Adding track:', track.kind, 'enabled:', track.enabled);
             pc.addTrack(track, localStream);
         });
+    } else {
+        console.error('Local stream is null!');
     }
 
     // リモートストリームの処理
     pc.ontrack = (event) => {
-        console.log('Received remote track from:', peerId);
+        console.log('Received remote track from:', peerId, 'kind:', event.track.kind);
         const remoteStream = event.streams[0];
+        
+        if (!remoteStream) {
+            console.error('No remote stream received');
+            return;
+        }
+        
+        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => ({kind: t.kind, enabled: t.enabled})));
         
         // プレイヤー専用の音声要素を作成
         let playerAudio = document.getElementById(`audio-${peerId}`);
@@ -866,11 +933,14 @@ async function createPeerConnection(peerId) {
     // ICE候補の処理
     pc.onicecandidate = (event) => {
         if (event.candidate) {
+            console.log('Sending ICE candidate to:', peerId);
             socket.emit('ice_candidate', {
                 room_id: roomId,
                 target_id: peerId,
                 candidate: event.candidate
             });
+        } else {
+            console.log('ICE gathering completed for:', peerId);
         }
     };
 
@@ -886,17 +956,31 @@ async function createPeerConnection(peerId) {
         }
     };
 
+    // ICE接続状態の監視
+    pc.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state with ${peerId}:`, pc.iceConnectionState);
+    };
+
+    // シグナリング状態の監視
+    pc.onsignalingstatechange = () => {
+        console.log(`Signaling state with ${peerId}:`, pc.signalingState);
+    };
+
     // オファーを作成して送信
     try {
         updateAudioStatus('connecting', '音声通話接続中...');
+        console.log('Creating offer for:', peerId);
         const offer = await pc.createOffer();
+        console.log('Offer created:', offer);
         await pc.setLocalDescription(offer);
+        console.log('Local description set');
         
         socket.emit('offer', {
             room_id: roomId,
             target_id: peerId,
             offer: offer
         });
+        console.log('Offer sent to server');
     } catch (error) {
         console.error('Error creating offer:', error);
         updateAudioStatus('error', '音声通話接続エラー');
@@ -906,23 +990,30 @@ async function createPeerConnection(peerId) {
 // オファー受信時の処理
 socket.on('offer', async (data) => {
     const { from_id, offer } = data;
+    console.log('Received offer from:', from_id, 'offer:', offer);
     
     if (!peerConnections[from_id]) {
+        console.log('Creating new peer connection for incoming offer from:', from_id);
         await createPeerConnection(from_id);
     }
     
     const pc = peerConnections[from_id];
     
     try {
+        console.log('Setting remote description for:', from_id);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log('Creating answer for:', from_id);
         const answer = await pc.createAnswer();
+        console.log('Answer created:', answer);
         await pc.setLocalDescription(answer);
+        console.log('Local description set for answer');
         
         socket.emit('answer', {
             room_id: roomId,
             target_id: from_id,
             answer: answer
         });
+        console.log('Answer sent to server');
     } catch (error) {
         console.error('Error handling offer:', error);
     }
@@ -931,39 +1022,58 @@ socket.on('offer', async (data) => {
 // アンサー受信時の処理
 socket.on('answer', async (data) => {
     const { from_id, answer } = data;
+    console.log('Received answer from:', from_id, 'answer:', answer);
     
     const pc = peerConnections[from_id];
     if (pc) {
         try {
+            console.log('Setting remote description for answer from:', from_id);
             await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log('Remote description set for answer');
         } catch (error) {
             console.error('Error handling answer:', error);
         }
+    } else {
+        console.error('No peer connection found for answer from:', from_id);
     }
 });
 
 // ICE候補受信時の処理
 socket.on('ice_candidate', async (data) => {
     const { from_id, candidate } = data;
+    console.log('Received ICE candidate from:', from_id, 'candidate:', candidate);
     
     const pc = peerConnections[from_id];
     if (pc) {
         try {
+            console.log('Adding ICE candidate for:', from_id);
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('ICE candidate added successfully');
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
         }
+    } else {
+        console.error('No peer connection found for ICE candidate from:', from_id);
     }
 });
 
 // ルーム内プレイヤー取得時の処理
 socket.on('room_players', (data) => {
     const { players } = data;
+    console.log('Received room players:', players);
     if (players && Array.isArray(players)) {
+        console.log('Setting up connections with', players.length, 'players');
         players.forEach(peerId => {
             if (peerId !== playerId && localStream) {
+                console.log('Creating connection with player:', peerId);
                 createPeerConnection(peerId);
+            } else if (peerId === playerId) {
+                console.log('Skipping self connection for:', peerId);
+            } else if (!localStream) {
+                console.error('Cannot create connection - local stream not available');
             }
         });
+    } else {
+        console.log('No players to connect with or invalid data:', data);
     }
 }); 
