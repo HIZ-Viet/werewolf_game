@@ -544,20 +544,36 @@ async function startAudio() {
         socket.emit('get_room_players', { room_id: roomId });
     }
 }
+// マイクのミュート状態を設定
 function setAudioMute(mute) {
     if (localStream) {
-        localStream.getAudioTracks().forEach(track => track.enabled = !mute);
-        
-        // ボタンの表示を切り替え
-        if (muteBtn && unmuteBtn) {
-            if (mute) {
-                muteBtn.style.display = 'none';
-                unmuteBtn.style.display = 'inline-block';
-            } else {
-                muteBtn.style.display = 'inline-block';
-                unmuteBtn.style.display = 'none';
+        localStream.getTracks().forEach(track => {
+            if (track.kind === 'audio') {
+                track.enabled = !mute;
+                addDebugLog(`Audio track ${mute ? 'muted' : 'unmuted'}: enabled = ${track.enabled}`, 'success');
             }
+        });
+        
+        // 既存の接続にも反映
+        Object.keys(peerConnections).forEach(peerId => {
+            const pc = peerConnections[peerId];
+            pc.getSenders().forEach(sender => {
+                if (sender.track && sender.track.kind === 'audio') {
+                    sender.track.enabled = !mute;
+                    addDebugLog(`Updated sender track for ${peerId}: enabled = ${sender.track.enabled}`, 'success');
+                }
+            });
+        });
+        
+        // UI更新
+        if (muteBtn && unmuteBtn) {
+            muteBtn.style.display = mute ? 'none' : 'inline-block';
+            unmuteBtn.style.display = mute ? 'inline-block' : 'none';
         }
+        
+        updateAudioStatus('connected', mute ? 'マイクOFF' : 'マイクON');
+    } else {
+        addDebugLog('No local stream available for mute control', 'error');
     }
 }
 
@@ -657,8 +673,8 @@ function addDebugButton() {
                 signalingState: pc.signalingState,
                 localDescription: pc.localDescription ? pc.localDescription.type : 'null',
                 remoteDescription: pc.remoteDescription ? pc.remoteDescription.type : 'null',
-                localStream: pc.getSenders().map(s => s.track ? s.track.kind : 'null'),
-                remoteStream: pc.getReceivers().map(r => r.track ? r.track.kind : 'null')
+                localStream: pc.getSenders().map(s => s.track ? `${s.track.kind}(enabled:${s.track.enabled})` : 'null'),
+                remoteStream: pc.getReceivers().map(r => r.track ? `${r.track.kind}(enabled:${r.track.enabled})` : 'null')
             });
         });
         
@@ -982,6 +998,11 @@ async function createPeerConnection(peerId) {
     if (localStream) {
         addDebugLog(`Adding local stream tracks to peer connection for: ${peerId}`);
         localStream.getTracks().forEach(track => {
+            // トラックが有効になっていることを確認
+            if (!track.enabled) {
+                addDebugLog(`Enabling track: ${track.kind}`, 'success');
+                track.enabled = true;
+            }
             addDebugLog(`Adding track: ${track.kind}, enabled: ${track.enabled}`);
             pc.addTrack(track, localStream);
         });
@@ -1078,6 +1099,13 @@ async function createPeerConnection(peerId) {
         if (pc.connectionState === 'connected') {
             addDebugLog(`✅ WebRTC connection established with ${peerId}`, 'success');
             updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
+            
+            // 接続確立後のトラック状態を確認
+            pc.getSenders().forEach(sender => {
+                if (sender.track) {
+                    addDebugLog(`Sender track: ${sender.track.kind}, enabled: ${sender.track.enabled}`, 'success');
+                }
+            });
         } else if (pc.connectionState === 'connecting') {
             addDebugLog(`🔄 Connecting to ${peerId}...`);
             updateAudioStatus('connecting', '音声通話接続中...');
@@ -1101,6 +1129,8 @@ async function createPeerConnection(peerId) {
             addDebugLog(`🔍 ICE checking with ${peerId}...`);
         } else if (pc.iceConnectionState === 'failed') {
             addDebugLog(`💥 ICE connection failed with ${peerId}`, 'error');
+        } else if (pc.iceConnectionState === 'completed') {
+            addDebugLog(`✅ ICE connection completed with ${peerId}`, 'success');
         }
     };
 
