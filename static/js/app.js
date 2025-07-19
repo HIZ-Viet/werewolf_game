@@ -586,14 +586,30 @@ if (enableAudioBtn) {
             // すべての音声要素を有効化
             const audioElements = document.querySelectorAll('audio');
             console.log('Found audio elements:', audioElements.length);
+            
             for (const audio of audioElements) {
                 console.log('Enabling audio element:', audio.id);
                 audio.muted = false;
+                audio.volume = 1.0;
+                
                 try {
+                    // 音声要素の状態を確認
+                    console.log('Audio element state before play:', {
+                        id: audio.id,
+                        srcObject: audio.srcObject,
+                        muted: audio.muted,
+                        volume: audio.volume,
+                        paused: audio.paused,
+                        readyState: audio.readyState
+                    });
+                    
                     await audio.play();
                     console.log('Audio play successful for:', audio.id);
                 } catch (e) {
                     console.log('Audio play failed for element:', audio.id, e);
+                    if (e.name === 'NotAllowedError') {
+                        alert('音声再生の許可が必要です。ブラウザの設定で音声再生を許可してください。');
+                    }
                 }
             }
             
@@ -614,28 +630,45 @@ function addDebugButton() {
     debugBtn.onclick = () => {
         console.log('=== DEBUG INFO ===');
         console.log('Local stream:', localStream);
+        console.log('Local stream tracks:', localStream ? localStream.getTracks().map(t => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState
+        })) : 'null');
         console.log('Peer connections:', Object.keys(peerConnections));
         console.log('Room ID:', roomId);
         console.log('Player ID:', playerId);
         console.log('Audio elements:', document.querySelectorAll('audio'));
         
-        if (localStream) {
-            console.log('Local stream tracks:', localStream.getTracks().map(t => ({
-                kind: t.kind,
-                enabled: t.enabled,
-                muted: t.muted,
-                readyState: t.readyState
-            })));
-        }
+        // 各音声要素の詳細情報
+        document.querySelectorAll('audio').forEach((audio, index) => {
+            console.log(`Audio element ${index}:`, {
+                id: audio.id,
+                srcObject: audio.srcObject,
+                muted: audio.muted,
+                volume: audio.volume,
+                paused: audio.paused,
+                readyState: audio.readyState,
+                networkState: audio.networkState
+            });
+        });
         
         Object.keys(peerConnections).forEach(peerId => {
             const pc = peerConnections[peerId];
             console.log(`Peer ${peerId}:`, {
                 connectionState: pc.connectionState,
                 iceConnectionState: pc.iceConnectionState,
-                signalingState: pc.signalingState
+                signalingState: pc.signalingState,
+                localDescription: pc.localDescription ? pc.localDescription.type : 'null',
+                remoteDescription: pc.remoteDescription ? pc.remoteDescription.type : 'null',
+                localStream: pc.getSenders().map(s => s.track ? s.track.kind : 'null'),
+                remoteStream: pc.getReceivers().map(r => r.track ? r.track.kind : 'null')
             });
         });
+        
+        // ICE候補キューの状態
+        console.log('ICE candidate queue:', iceCandidateQueue);
         
         alert('デバッグ情報をコンソールに出力しました。F12キーで開発者ツールを開いて確認してください。');
     };
@@ -913,25 +946,52 @@ async function createPeerConnection(peerId) {
             playerAudio.playsinline = true;
             playerAudio.muted = false;
             playerAudio.volume = 1.0;
+            playerAudio.controls = false;
             
             // 音声要素をページに追加
             if (audioSection) {
                 audioSection.appendChild(playerAudio);
             }
+            
+            console.log('Created audio element for peer:', peerId);
         }
         
         // ストリームを設定
         playerAudio.srcObject = remoteStream;
+        console.log('Set srcObject for audio element:', playerAudio.id);
+        
+        // 音声要素の状態を監視
+        playerAudio.onloadedmetadata = () => {
+            console.log('Audio metadata loaded for:', peerId);
+        };
+        
+        playerAudio.oncanplay = () => {
+            console.log('Audio can play for:', peerId);
+        };
+        
+        playerAudio.onplay = () => {
+            console.log('Audio started playing for:', peerId);
+        };
+        
+        playerAudio.onerror = (e) => {
+            console.error('Audio error for:', peerId, e);
+        };
         
         // 音声再生を試行
-        playerAudio.play().catch(e => {
-            console.error('Error playing remote audio for', peerId, ':', e);
-            if (e.name === 'NotAllowedError') {
-                updateAudioStatus('error', '音声再生の許可が必要です。「音声有効化」ボタンをタップしてください。');
-            }
-        });
-        
-        updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
+        const playPromise = playerAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                console.log('Audio play successful for:', peerId);
+                updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
+            }).catch(e => {
+                console.error('Error playing remote audio for', peerId, ':', e);
+                if (e.name === 'NotAllowedError') {
+                    updateAudioStatus('error', '音声再生の許可が必要です。「音声有効化」ボタンをタップしてください。');
+                } else {
+                    updateAudioStatus('error', `音声再生エラー: ${e.message}`);
+                }
+            });
+        }
     };
 
     // ICE候補の処理
@@ -952,22 +1012,40 @@ async function createPeerConnection(peerId) {
     pc.onconnectionstatechange = () => {
         console.log(`Connection state with ${peerId}:`, pc.connectionState);
         if (pc.connectionState === 'connected') {
+            console.log(`✅ WebRTC connection established with ${peerId}`);
             updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
         } else if (pc.connectionState === 'connecting') {
+            console.log(`🔄 Connecting to ${peerId}...`);
             updateAudioStatus('connecting', '音声通話接続中...');
-        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        } else if (pc.connectionState === 'disconnected') {
+            console.log(`❌ Disconnected from ${peerId}`);
             updateAudioStatus('disconnected', '音声通話接続が切断されました');
+        } else if (pc.connectionState === 'failed') {
+            console.log(`💥 Connection failed with ${peerId}`);
+            updateAudioStatus('error', '音声通話接続に失敗しました');
+        } else if (pc.connectionState === 'new') {
+            console.log(`🆕 New connection created with ${peerId}`);
         }
     };
 
     // ICE接続状態の監視
     pc.oniceconnectionstatechange = () => {
         console.log(`ICE connection state with ${peerId}:`, pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected') {
+            console.log(`✅ ICE connection established with ${peerId}`);
+        } else if (pc.iceConnectionState === 'checking') {
+            console.log(`🔍 ICE checking with ${peerId}...`);
+        } else if (pc.iceConnectionState === 'failed') {
+            console.log(`💥 ICE connection failed with ${peerId}`);
+        }
     };
 
     // シグナリング状態の監視
     pc.onsignalingstatechange = () => {
         console.log(`Signaling state with ${peerId}:`, pc.signalingState);
+        if (pc.signalingState === 'stable') {
+            console.log(`✅ Signaling stable with ${peerId}`);
+        }
     };
 
     // オファーを作成して送信（ローカルストリームがある場合のみ）
