@@ -16,10 +16,29 @@ let currentPhase = null;
 
 // WebRTC設定
 const rtcConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
+    iceServers: [
+        {
+            urls: [
+                'stun:stun.l.google.com:19302',
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302',
+                'stun:stun3.l.google.com:19302',
+                'stun:stun4.l.google.com:19302'
+            ]
+        },
+        {
+            urls: [
+                'stun:stun.voiparound.com:3478',
+                'stun:stun.voipbuster.com:3478',
+                'stun:stun.voipstunt.com:3478'
+            ]
+        }
+    ],
+    iceCandidatePoolSize: 10,
+    iceTransportPolicy: 'all',
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+    iceConnectionState: 'all'
 };
 
 // UI要素
@@ -983,6 +1002,9 @@ if (updateSettingsBtn) {
     });
 } 
 
+// 接続タイムアウト管理
+const connectionTimeouts = {};
+
 // WebRTC接続作成
 async function createPeerConnection(peerId) {
     if (peerConnections[peerId]) {
@@ -993,6 +1015,19 @@ async function createPeerConnection(peerId) {
     addDebugLog(`Creating peer connection for: ${peerId}`);
     const pc = new RTCPeerConnection(rtcConfig);
     peerConnections[peerId] = pc;
+
+    // 接続タイムアウトを設定（30秒）
+    connectionTimeouts[peerId] = setTimeout(() => {
+        if (pc.connectionState === 'connecting' || pc.iceConnectionState === 'checking') {
+            addDebugLog(`Connection timeout for: ${peerId}`, 'error');
+            updateAudioStatus('error', '接続タイムアウト - ネットワーク環境を確認してください');
+            
+            // 接続をリセット
+            pc.close();
+            delete peerConnections[peerId];
+            delete connectionTimeouts[peerId];
+        }
+    }, 30000);
 
     // ローカルストリームを追加（存在する場合のみ）
     if (localStream) {
@@ -1100,6 +1135,12 @@ async function createPeerConnection(peerId) {
             addDebugLog(`✅ WebRTC connection established with ${peerId}`, 'success');
             updateAudioStatus('connected', `音声通話接続済み (${Object.keys(peerConnections).length}人)`);
             
+            // タイムアウトをクリア
+            if (connectionTimeouts[peerId]) {
+                clearTimeout(connectionTimeouts[peerId]);
+                delete connectionTimeouts[peerId];
+            }
+            
             // 接続確立後のトラック状態を確認
             pc.getSenders().forEach(sender => {
                 if (sender.track) {
@@ -1112,9 +1153,21 @@ async function createPeerConnection(peerId) {
         } else if (pc.connectionState === 'disconnected') {
             addDebugLog(`❌ Disconnected from ${peerId}`, 'error');
             updateAudioStatus('disconnected', '音声通話接続が切断されました');
+            
+            // タイムアウトをクリア
+            if (connectionTimeouts[peerId]) {
+                clearTimeout(connectionTimeouts[peerId]);
+                delete connectionTimeouts[peerId];
+            }
         } else if (pc.connectionState === 'failed') {
             addDebugLog(`💥 Connection failed with ${peerId}`, 'error');
             updateAudioStatus('error', '音声通話接続に失敗しました');
+            
+            // タイムアウトをクリア
+            if (connectionTimeouts[peerId]) {
+                clearTimeout(connectionTimeouts[peerId]);
+                delete connectionTimeouts[peerId];
+            }
         } else if (pc.connectionState === 'new') {
             addDebugLog(`🆕 New connection created with ${peerId}`);
         }
