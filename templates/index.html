@@ -79,16 +79,68 @@
                 <div id="readyStatus" style="margin-top: 10px;"></div>
             </div>
             
-            <div id="audioSection">
-                <audio id="remoteAudio" autoplay playsinline muted></audio>
-                <div style="margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
-                    <div style="font-weight: bold; margin-bottom: 5px;">音声通話</div>
-                    <div id="audioStatus" style="font-size: 14px; color: #666; margin-bottom: 10px;">接続中...</div>
-                    <button id="muteBtn" style="background-color: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">マイクOFF</button>
-                    <button id="unmuteBtn" style="background-color: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; display: none;">マイクON</button>
-                    <button id="enableAudioBtn" style="background-color: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">音声有効化</button>
+            <!-- 音声通話セクション -->
+        <div id="audioSection" style="margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+            <h3 style="margin: 0 0 10px 0; color: #333;">音声通話</h3>
+            
+            <!-- LINE通話連携セクション -->
+            <div id="lineCallSection" style="margin-bottom: 15px;">
+                <div style="background: #00B900; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                    <h4 style="margin: 0; font-size: 16px;">📞 LINEグループ通話</h4>
+                    <p style="margin: 5px 0 0 0; font-size: 14px;">安定した音声通話のため、LINEアプリをご利用ください</p>
+                </div>
+                
+                <div id="lineCallInfo" style="background: #e8f5e8; padding: 10px; border-radius: 5px; border-left: 4px solid #00B900;">
+                    <p style="margin: 0 0 8px 0; font-weight: bold; color: #2E7D32;">📋 使用方法：</p>
+                    <ol style="margin: 0; padding-left: 20px; color: #2E7D32;">
+                        <li>LINEアプリでグループを作成</li>
+                        <li>ゲーム参加者をグループに招待</li>
+                        <li>グループ通話を開始</li>
+                        <li>このゲームと並行してプレイ</li>
+                    </ol>
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <button id="createLineGroupBtn" style="background: #00B900; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                        📱 LINEグループ作成ガイド
+                    </button>
+                    <button id="copyRoomInfoBtn" style="background: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
+                        📋 ルーム情報をコピー
+                    </button>
                 </div>
             </div>
+            
+            <!-- 従来のWebRTC通話（非推奨表示） -->
+            <div id="webrtcSection" style="opacity: 0.5; pointer-events: none;">
+                <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                    <p style="margin: 0; font-size: 14px;">⚠️ 現在、WebRTC通話は不安定なため非推奨です</p>
+                </div>
+                
+                <div id="audioStatus" style="margin-bottom: 10px; padding: 8px; background: #fff; border-radius: 5px; border: 1px solid #ddd;">
+                    音声通話接続待機中...
+                </div>
+                
+                <button id="enableAudioBtn" style="background: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px; display: none;">
+                    音声有効化
+                </button>
+                
+                <button id="muteBtn" style="background: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px; display: none;">
+                    マイクOFF
+                </button>
+                
+                <button id="unmuteBtn" style="background: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px; display: none;">
+                    マイクON
+                </button>
+                
+                <button id="debugBtn" style="background: #9C27B0; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                    デバッグ情報
+                </button>
+                
+                <button id="logToggleBtn" style="background: #FF5722; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
+                    ログ表示
+                </button>
+            </div>
+        </div>
             <div id="chatSection">
                 <div id="chatMessages" style="height:150px;overflow:auto;"></div>
                 <input type="text" id="chatInput" placeholder="メッセージ">

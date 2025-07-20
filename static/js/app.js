@@ -901,11 +901,17 @@ socket.on('all_ready', data => {
     phaseInfo.textContent = `フェーズ: ${data.phase}`;
 });
 
-// ページロード時に音声取得
+// ページロード時の初期化
 window.onload = () => {
-    startAudio();
+    // LINE通話機能を初期化
+    initializeLineCallFeatures();
+    
+    // WebRTC通話を無効化
+    disableWebRTCCalls();
+    
+    // デバッグボタンを追加（開発用）
     addDebugButton();
-    addDebugToggleButton(); // デバッグ表示の切り替えボタンを追加
+    addDebugToggleButton();
 }; 
 
 // 2. 役職名・説明
@@ -1349,3 +1355,108 @@ socket.on('room_players', (data) => {
         console.log('No players to connect with or invalid data:', data);
     }
 }); 
+
+// LINE通話連携機能
+function initializeLineCallFeatures() {
+    const createLineGroupBtn = document.getElementById('createLineGroupBtn');
+    const copyRoomInfoBtn = document.getElementById('copyRoomInfoBtn');
+    
+    if (createLineGroupBtn) {
+        createLineGroupBtn.onclick = () => {
+            showLineGroupGuide();
+        };
+    }
+    
+    if (copyRoomInfoBtn) {
+        copyRoomInfoBtn.onclick = () => {
+            copyRoomInfoToClipboard();
+        };
+    }
+}
+
+// LINEグループ作成ガイドを表示
+function showLineGroupGuide() {
+    const guideText = `
+📱 LINEグループ作成ガイド
+
+1️⃣ LINEアプリを開く
+2️⃣ 「友だち」タブをタップ
+3️⃣ 「グループ」→「新規作成」をタップ
+4️⃣ ゲーム参加者を選択
+5️⃣ グループ名を入力（例：「人狼ゲーム」）
+6️⃣ 「作成」をタップ
+7️⃣ グループ通話を開始
+
+💡 ヒント：
+• ゲーム開始前に通話を開始してください
+• 通話中はマイクのON/OFFで役職チャットを活用
+• ゲーム進行中は静かにして他のプレイヤーの話を聞いてください
+    `;
+    
+    alert(guideText);
+}
+
+// ルーム情報をクリップボードにコピー
+function copyRoomInfoToClipboard() {
+    const roomInfo = `
+🎮 人狼ゲーム - ルーム情報
+
+ルームID: ${roomId}
+参加者: ${playerName}
+URL: ${window.location.href}
+
+📞 LINEグループ通話で音声通話を行ってください
+    `;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(roomInfo).then(() => {
+            alert('✅ ルーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
+        }).catch(() => {
+            // フォールバック
+            fallbackCopyTextToClipboard(roomInfo);
+        });
+    } else {
+        fallbackCopyTextToClipboard(roomInfo);
+    }
+}
+
+// フォールバック用のコピー機能
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        alert('✅ ルーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
+    } catch (err) {
+        alert('❌ コピーに失敗しました。手動でコピーしてください。\n\n' + text);
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// WebRTC通話を無効化
+function disableWebRTCCalls() {
+    // WebRTC関連の機能を無効化
+    if (typeof startAudio === 'function') {
+        // startAudio関数を無効化
+        window.startAudio = () => {
+            console.log('WebRTC通話は現在無効化されています。LINE通話をご利用ください。');
+        };
+    }
+    
+    // 音声要素を削除
+    const audioElements = document.querySelectorAll('audio');
+    audioElements.forEach(audio => {
+        audio.remove();
+    });
+    
+    // 接続状態を更新
+    updateAudioStatus('disabled', 'LINE通話をご利用ください');
+} 
