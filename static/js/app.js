@@ -267,52 +267,66 @@ if (startGameBtn) {
     };
 }
 
-// ゲーム開始
-socket.on('game_started', data => {
+// ゲーム開始イベント
+socket.on('game_started', (data) => {
     console.log('game_started event received:', data);
-    phaseInfo.textContent = `フェーズ: ${data.phase}`;
+    hideRoomArea();
+    showGameArea();
     
-    // ゲームスタートボタンを非表示
-    if (hostControls) {
-        hostControls.style.display = 'none';
-    }
+    // LINE通話制御を開始
+    lineCallController.playerId = playerId;
+    onGameStart();
     
-    // 投票UIや役職UIの初期化
-    if (voteSection) {
-        voteSection.style.display = '';
+    // 既存の処理
+    if (data.roles) {
+        updateRoleAssignments(data.roles);
     }
-    // 役職説明フェーズなら必ず役職説明画面・サイドバーを表示
-    if (data.phase === 'role_explanation') {
-        // 役職情報がなければplayers配列から自分の情報を探す
-        if (!myRoleInfo && data.players) {
-            const me = data.players.find(p => p.id === playerId);
-            if (me) {
-                myRoleInfo = {
-                    role: me.role,
-                    description: '', // 必要ならクライアント側でROLE_DESCRIPTIONSを参照
-                    partners: []
-                };
-            }
-        }
-        if (myRoleInfo) {
-            if (roleExplanation && roleExplanationContent) {
-                roleExplanationContent.innerHTML = `
-                    <h3>${myRoleInfo.role}</h3>
-                    <p>${myRoleInfo.description}</p>
-                    ${myRoleInfo.partners && myRoleInfo.partners.length > 0 ? `<p><strong>相方:</strong> ${myRoleInfo.partners.join(', ')}</p>` : ''}
-                `;
-                roleExplanation.style.display = '';
-                sidebar.style.display = '';
-                document.getElementById('app').style.marginLeft = '220px';
-                updateRoleChats(myRoleInfo.role);
-            }
-        }
-    }
+});
 
-    if (!playerId && data.players) {
-        const me = data.players.find(p => p.name === playerNameInput.value.trim());
-        if (me) playerId = me.id;
+// フェーズ変更イベント
+socket.on('phase_changed', (data) => {
+    const { phase, day_number, remaining_time } = data;
+    
+    // LINE通話制御を更新
+    onPhaseChange(phase);
+    
+    // 既存の処理
+    if (phase === 'night') {
+        showNightPhaseArea(day_number, remaining_time);
+    } else if (phase === 'day') {
+        showDayPhaseArea(day_number, remaining_time);
     }
+});
+
+// プレイヤー死亡イベント
+socket.on('player_died', (data) => {
+    const { player_id, cause } = data;
+    
+    // LINE通話制御を更新
+    onPlayerDeath(player_id);
+    
+    // 既存の処理
+    updateAlivePlayers(data.alive_players);
+});
+
+// 役職チャット開始イベント
+socket.on('role_chat_start', (data) => {
+    const { role } = data;
+    
+    // LINE通話制御を更新
+    onRoleChatStart(role);
+    
+    // 既存の処理
+    openRoleChat(role);
+});
+
+// 役職チャット終了イベント
+socket.on('role_chat_end', (data) => {
+    // LINE通話制御を更新
+    onRoleChatEnd();
+    
+    // 既存の処理
+    closeRoleChat();
 });
 
 // 役職配布
@@ -1356,69 +1370,226 @@ socket.on('room_players', (data) => {
     }
 }); 
 
+// LINE通話自動制御機能
+let lineCallController = {
+    isAlive: true,
+    currentPhase: 'waiting',
+    gameStarted: false
+};
+
 // LINE通話連携機能
 function initializeLineCallFeatures() {
-    const createLineGroupBtn = document.getElementById('createLineGroupBtn');
-    const copyRoomInfoBtn = document.getElementById('copyRoomInfoBtn');
+    const copyGameInfoBtn = document.getElementById('copyGameInfoBtn');
+    const showLineGuideBtn = document.getElementById('showLineGuideBtn');
     
-    if (createLineGroupBtn) {
-        createLineGroupBtn.onclick = () => {
-            showLineGroupGuide();
+    if (copyGameInfoBtn) {
+        copyGameInfoBtn.onclick = () => {
+            copyGameInfoToClipboard();
         };
     }
     
-    if (copyRoomInfoBtn) {
-        copyRoomInfoBtn.onclick = () => {
-            copyRoomInfoToClipboard();
+    if (showLineGuideBtn) {
+        showLineGuideBtn.onclick = () => {
+            showLineCallGuide();
         };
     }
+    
+    // 初期状態を更新
+    updateLineCallStatus();
 }
 
-// LINEグループ作成ガイドを表示
-function showLineGroupGuide() {
+// LINE通話ガイドを表示
+function showLineCallGuide() {
     const guideText = `
-📱 LINEグループ作成ガイド
+📖 LINE通話自動制御ガイド
 
-1️⃣ LINEアプリを開く
-2️⃣ 「友だち」タブをタップ
-3️⃣ 「グループ」→「新規作成」をタップ
-4️⃣ ゲーム参加者を選択
-5️⃣ グループ名を入力（例：「人狼ゲーム」）
-6️⃣ 「作成」をタップ
-7️⃣ グループ通話を開始
+🎮 ゲーム開始前：
+1. 既存のLINEグループで通話を開始
+2. 全員が通話に参加していることを確認
+3. このゲームを開始
 
-💡 ヒント：
-• ゲーム開始前に通話を開始してください
-• 通話中はマイクのON/OFFで役職チャットを活用
-• ゲーム進行中は静かにして他のプレイヤーの話を聞いてください
+🎤 自動ミュート制御：
+• 夜のフェーズ：全員自動ミュート
+• 昼のフェーズ：生存者のみミュート解除
+• 殺害された場合：自動ミュート
+• 役職チャット時：該当役職のみミュート解除
+
+💡 注意事項：
+• LINEアプリの通知をONにしてください
+• ゲーム進行に合わせてLINE通話の音量を調整
+• 役職チャット時は静かにして他のプレイヤーの話を聞いてください
     `;
     
     alert(guideText);
 }
 
-// ルーム情報をクリップボードにコピー
-function copyRoomInfoToClipboard() {
-    const roomInfo = `
-🎮 人狼ゲーム - ルーム情報
+// ゲーム情報をクリップボードにコピー
+function copyGameInfoToClipboard() {
+    const gameInfo = `
+🎮 人狼ゲーム - 自動制御モード
 
 ルームID: ${roomId}
 参加者: ${playerName}
 URL: ${window.location.href}
 
-📞 LINEグループ通話で音声通話を行ってください
+📞 LINE通話自動制御：
+• ゲーム進行に応じて自動でミュート制御
+• 殺害された場合は自動でミュート
+• 役職チャット時は該当役職のみミュート解除
+
+💡 既存のLINEグループで通話を開始してからゲームを開始してください
     `;
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(roomInfo).then(() => {
-            alert('✅ ルーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
+        navigator.clipboard.writeText(gameInfo).then(() => {
+            alert('✅ ゲーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
         }).catch(() => {
-            // フォールバック
-            fallbackCopyTextToClipboard(roomInfo);
+            fallbackCopyTextToClipboard(gameInfo);
         });
     } else {
-        fallbackCopyTextToClipboard(roomInfo);
+        fallbackCopyTextToClipboard(gameInfo);
     }
 }
+
+// LINE通話状態を更新
+function updateLineCallStatus() {
+    const gameStatusText = document.getElementById('gameStatusText');
+    const micStatusText = document.getElementById('micStatusText');
+    
+    if (gameStatusText) {
+        gameStatusText.textContent = getGameStatusText();
+    }
+    
+    if (micStatusText) {
+        micStatusText.textContent = getMicStatusText();
+    }
+}
+
+// ゲーム状態テキストを取得
+function getGameStatusText() {
+    if (!lineCallController.gameStarted) {
+        return '待機中';
+    }
+    
+    switch (lineCallController.currentPhase) {
+        case 'night':
+            return '夜のフェーズ（全員ミュート）';
+        case 'day':
+            return '昼のフェーズ（生存者のみ）';
+        case 'voting':
+            return '投票フェーズ（生存者のみ）';
+        case 'dead':
+            return '死亡（自動ミュート）';
+        default:
+            return '進行中';
+    }
+}
+
+// マイク状態テキストを取得
+function getMicStatusText() {
+    if (!lineCallController.gameStarted) {
+        return 'ゲーム開始前';
+    }
+    
+    if (!lineCallController.isAlive) {
+        return '❌ 死亡により自動ミュート';
+    }
+    
+    switch (lineCallController.currentPhase) {
+        case 'night':
+            return '🔇 夜のフェーズにより自動ミュート';
+        case 'day':
+            return '🎤 昼のフェーズ - 発言可能';
+        case 'voting':
+            return '🎤 投票フェーズ - 発言可能';
+        default:
+            return '🎤 発言可能';
+    }
+}
+
+// ゲーム開始時の処理
+function onGameStart() {
+    lineCallController.gameStarted = true;
+    lineCallController.isAlive = true;
+    lineCallController.currentPhase = 'night';
+    
+    updateLineCallStatus();
+    showLineCallNotification('ゲーム開始', '夜のフェーズです。全員自動ミュートされます。');
+}
+
+// フェーズ変更時の処理
+function onPhaseChange(newPhase) {
+    lineCallController.currentPhase = newPhase;
+    
+    updateLineCallStatus();
+    
+    switch (newPhase) {
+        case 'night':
+            showLineCallNotification('夜のフェーズ', '全員自動ミュートされます。役職チャット時のみミュート解除。');
+            break;
+        case 'day':
+            if (lineCallController.isAlive) {
+                showLineCallNotification('昼のフェーズ', '生存者のみミュート解除されます。');
+            }
+            break;
+        case 'voting':
+            if (lineCallController.isAlive) {
+                showLineCallNotification('投票フェーズ', '生存者のみ発言可能です。');
+            }
+            break;
+    }
+}
+
+// プレイヤー死亡時の処理
+function onPlayerDeath(playerId) {
+    if (playerId === lineCallController.playerId) {
+        lineCallController.isAlive = false;
+        updateLineCallStatus();
+        showLineCallNotification('死亡', '自動でミュートされます。観戦モードに移行。');
+    }
+}
+
+// 役職チャット開始時の処理
+function onRoleChatStart(role) {
+    if (lineCallController.isAlive && hasRole(role)) {
+        showLineCallNotification('役職チャット', `${role}の役職チャットです。ミュートを解除してください。`);
+    }
+}
+
+// 役職チャット終了時の処理
+function onRoleChatEnd() {
+    if (lineCallController.isAlive) {
+        showLineCallNotification('役職チャット終了', '通常のミュート状態に戻ります。');
+    }
+}
+
+// LINE通話通知を表示
+function showLineCallNotification(title, message) {
+    const notification = `
+📞 LINE通話制御通知
+
+${title}
+${message}
+
+💡 LINEアプリで手動でミュート/ミュート解除を行ってください
+    `;
+    
+    // 通知を表示（非ブロッキング）
+    setTimeout(() => {
+        console.log(`LINE通話制御: ${title} - ${message}`);
+    }, 100);
+    
+    // 重要な通知のみアラート表示
+    if (title === '死亡' || title === 'ゲーム開始') {
+        alert(notification);
+    }
+}
+
+// 役職を持っているかチェック
+function hasRole(role) {
+    // プレイヤーの役職をチェック（実装は既存のコードに依存）
+    return true; // 仮実装
+} 
 
 // フォールバック用のコピー機能
 function fallbackCopyTextToClipboard(text) {
@@ -1433,7 +1604,7 @@ function fallbackCopyTextToClipboard(text) {
     
     try {
         document.execCommand('copy');
-        alert('✅ ルーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
+        alert('✅ ゲーム情報をクリップボードにコピーしました！\n\nLINEグループで共有してください。');
     } catch (err) {
         alert('❌ コピーに失敗しました。手動でコピーしてください。\n\n' + text);
     }

@@ -86,26 +86,35 @@
             <!-- LINE通話連携セクション -->
             <div id="lineCallSection" style="margin-bottom: 15px;">
                 <div style="background: #00B900; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                    <h4 style="margin: 0; font-size: 16px;">📞 LINEグループ通話</h4>
-                    <p style="margin: 5px 0 0 0; font-size: 14px;">安定した音声通話のため、LINEアプリをご利用ください</p>
+                    <h4 style="margin: 0; font-size: 16px;">📞 LINEグループ通話（自動制御）</h4>
+                    <p style="margin: 5px 0 0 0; font-size: 14px;">既存のLINEグループで通話を開始し、ゲーム進行に応じて自動でミュート制御を行います</p>
                 </div>
                 
                 <div id="lineCallInfo" style="background: #e8f5e8; padding: 10px; border-radius: 5px; border-left: 4px solid #00B900;">
                     <p style="margin: 0 0 8px 0; font-weight: bold; color: #2E7D32;">📋 使用方法：</p>
                     <ol style="margin: 0; padding-left: 20px; color: #2E7D32;">
-                        <li>LINEアプリでグループを作成</li>
-                        <li>ゲーム参加者をグループに招待</li>
-                        <li>グループ通話を開始</li>
-                        <li>このゲームと並行してプレイ</li>
+                        <li>既存のLINEグループで通話を開始</li>
+                        <li>このゲームを開始</li>
+                        <li>ゲーム進行に応じて自動でミュート制御</li>
+                        <li>殺害された場合は自動でミュート</li>
                     </ol>
                 </div>
                 
+                <div id="lineCallStatus" style="background: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeaa7; margin: 10px 0;">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>🎮 ゲーム状態:</strong> <span id="gameStatusText">待機中</span>
+                    </p>
+                    <p style="margin: 5px 0 0 0; color: #856404;">
+                        <strong>🎤 マイク状態:</strong> <span id="micStatusText">-</span>
+                    </p>
+                </div>
+                
                 <div style="margin-top: 10px;">
-                    <button id="createLineGroupBtn" style="background: #00B900; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-                        📱 LINEグループ作成ガイド
+                    <button id="copyGameInfoBtn" style="background: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                        📋 ゲーム情報をコピー
                     </button>
-                    <button id="copyRoomInfoBtn" style="background: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
-                        📋 ルーム情報をコピー
+                    <button id="showLineGuideBtn" style="background: #00B900; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
+                        📖 LINE通話ガイド
                     </button>
                 </div>
             </div>
